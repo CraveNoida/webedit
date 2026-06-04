@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
-import { FileUpload } from "@/components/file-upload";
+import { FileUpload, GalleryUpload } from "@/components/file-upload";
 import { EDITOR_SCRIPT } from "@/lib/editor-script";
 
 const formSchema = z.object({
@@ -69,7 +69,6 @@ export default function ProjectWorkspace() {
   const [services, setServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [newGalleryImage, setNewGalleryImage] = useState("");
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editSaveStatus, setEditSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -590,27 +589,7 @@ export default function ProjectWorkspace() {
 
                 <div>
                   <p className="text-xs font-medium mb-2">Gallery Images</p>
-                  <div className="flex gap-2 mb-2">
-                    <Input
-                      value={newGalleryImage}
-                      onChange={(e) => setNewGalleryImage(e.target.value)}
-                      placeholder="Image URL..."
-                      className="h-8 text-sm"
-                      data-testid="input-gallery-image"
-                    />
-                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0"
-                      onClick={() => { if (newGalleryImage.trim()) { setGalleryImages([...galleryImages, newGalleryImage.trim()]); setNewGalleryImage(""); } }}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  {galleryImages.map((img, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-1">
-                      <span className="text-xs text-muted-foreground truncate flex-1">{img}</span>
-                      <button type="button" onClick={() => setGalleryImages(galleryImages.filter((_, j) => j !== i))}>
-                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                      </button>
-                    </div>
-                  ))}
+                  <GalleryUpload images={galleryImages} onChange={setGalleryImages} compact />
                 </div>
               </form>
             </Form>

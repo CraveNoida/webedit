@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ArrowRight, CheckCircle2, Code2, Loader2, X, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
-import { FileUpload } from "@/components/file-upload";
+import { FileUpload, GalleryUpload } from "@/components/file-upload";
 
 const formSchema = z.object({
   businessName: z.string().min(1, "Business name is required"),
@@ -44,7 +44,6 @@ export default function ProjectNew() {
   const [services, setServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [newGalleryImage, setNewGalleryImage] = useState("");
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -315,6 +314,16 @@ export default function ProjectNew() {
                       </Badge>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Gallery Images</CardTitle>
+                  <p className="text-sm text-muted-foreground">Upload photos or paste URLs to populate the website gallery.</p>
+                </CardHeader>
+                <CardContent>
+                  <GalleryUpload images={galleryImages} onChange={setGalleryImages} />
                 </CardContent>
               </Card>
 
