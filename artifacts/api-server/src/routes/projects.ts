@@ -16,6 +16,80 @@ import {
 
 const router = Router();
 
+/**
+ * Prepares generated HTML for offline use:
+ * - Removes relative-path CSS/JS refs that don't exist in the ZIP
+ * - Hides loading-screen overlays in the markup so they don't block content
+ * - Injects a script that continuously forces content visible, overriding
+ *   GSAP/ScrollTrigger/AOS/WOW.js animations that keep sections at opacity:0
+ */
+function prepareDownloadHtml(html: string): string {
+  let out = html;
+
+  // 1. Strip relative-path <link> stylesheets (not http/https/protocol-relative)
+  out = out.replace(/<link\b[^>]*\bhref=["'](?!https?:\/\/|\/\/)([^"']+\.css)["'][^>]*>/gi, '');
+
+  // 2. Strip relative-path <script src> tags
+  out = out.replace(/<script\b[^>]*\bsrc=["'](?!https?:\/\/|\/\/)([^"']+\.js)["'][^>]*><\/script>/gi, '');
+
+  // 3. Hide loading-screen overlay in markup (both id="loader" and class="loading-screen" patterns)
+  out = out.replace(/(<div\b[^>]*\bid=["']loader["'])([^>]*>)/gi, '$1 style="display:none!important"$2');
+  out = out.replace(/(<div\b[^>]*\bclass=["'][^"']*loading[-_]screen[^"']*["'])([^>]*>)/gi, '$1 style="display:none!important"$2');
+
+  // 4. Inject a reveal script into <head> that:
+  //    - Marks body with .no-gsap so CSS fallbacks kick in
+  //    - Polls every 100ms for 5s, forcing near-invisible elements visible
+  //    (covers GSAP inline-style overrides, AOS, WOW.js, ScrollTrigger, custom JS)
+  const revealScript = `<script id="wj-reveal">
+(function(){
+  var LOADERS=['#loader','.loading-screen','#loading-screen','#preloader','.preloader','#splash','#overlay-loader'];
+  var SHOW_SELS=[
+    'section','article','header','footer','main','nav',
+    '.hero-subtitle','.hero-title','.hero-desc','.hero-btns','.hero-glass-card',
+    '.section-header','.section-header *',
+    '.service-card','.gallery-item','.about-img','.about-text',
+    '.booking-info','.booking-form','.price-card','.insta-item',
+    '.testi-track','.stat-num','.footer-grid > div',
+    '[data-aos]','.wow','.animated','[class*="fade"]','[class*="reveal"]','[class*="scroll"]'
+  ];
+  function fix(){
+    // Remove loading overlays
+    LOADERS.forEach(function(s){ var el=document.querySelector(s); if(el){ el.style.setProperty('display','none','important'); } });
+    // Restore body scroll and cursor
+    document.body.style.overflow='auto';
+    document.body.style.cursor='auto';
+    // Add no-gsap class so CSS fallbacks apply
+    document.body.classList.add('no-gsap');
+    // Force all animation-hidden elements visible
+    SHOW_SELS.forEach(function(sel){
+      try{
+        document.querySelectorAll(sel).forEach(function(el){
+          var cs=window.getComputedStyle(el);
+          var op=parseFloat(cs.opacity);
+          if(op<0.05){ el.style.setProperty('opacity','1','important'); }
+          if(cs.visibility==='hidden'){ el.style.setProperty('visibility','visible','important'); }
+          if(cs.transform&&cs.transform!=='none'&&op<0.5){ el.style.setProperty('transform','none','important'); }
+          el.removeAttribute('data-aos');
+        });
+      }catch(e){}
+    });
+  }
+  // Start polling on DOMContentLoaded
+  document.addEventListener('DOMContentLoaded',function(){
+    var ticks=0;
+    fix();
+    var iv=setInterval(function(){ fix(); if(++ticks>=50) clearInterval(iv); },100);
+  });
+  // Also run at load time
+  window.addEventListener('load',function(){ fix(); setTimeout(fix,300); setTimeout(fix,1000); setTimeout(fix,3500); });
+})();
+</script>`;
+
+  out = out.replace('<head>', '<head>\n' + revealScript);
+
+  return out;
+}
+
 function generateHtml(template: { htmlContent: string; cssContent?: string | null; jsContent?: string | null }, data: Record<string, string | string[]>): string {
   let html = template.htmlContent;
 
@@ -356,43 +430,7 @@ router.get("/:id/download-zip", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${slug}-demo.zip"`);
 
-  // Inject a reveal script so animation-hidden sections show up in the offline file
-  const revealScript = `\n<script id="wj-reveal">
-(function(){
-  function reveal(){
-    // AOS (Animate On Scroll)
-    document.querySelectorAll('[data-aos]').forEach(function(el){
-      el.style.opacity='1'; el.style.transform='none'; el.style.transition='none';
-      el.removeAttribute('data-aos');
-    });
-    // WOW.js / animated.css hidden state
-    document.querySelectorAll('.wow,.wow-animated').forEach(function(el){
-      el.style.visibility='visible'; el.style.opacity='1'; el.style.animationName='none';
-    });
-    // Intersection-observer-based fade-in patterns (common class names)
-    ['fade-in','fade-up','fade-down','scroll-hidden','is-hidden','reveal','reveal-item',
-     'hidden-section','section-hidden','opacity-0','invisible'].forEach(function(cls){
-      document.querySelectorAll('.'+cls).forEach(function(el){
-        el.style.opacity='1'; el.style.visibility='visible'; el.style.transform='none';
-        el.style.transition='none';
-      });
-    });
-    // Remove any inline opacity:0 / visibility:hidden on section-level elements
-    ['section','article','div','header','footer','main'].forEach(function(tag){
-      document.querySelectorAll(tag).forEach(function(el){
-        var cs=window.getComputedStyle(el);
-        if(cs.opacity==='0'){ el.style.opacity='1'; }
-        if(cs.visibility==='hidden'){ el.style.visibility='visible'; }
-      });
-    });
-  }
-  if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',reveal); }
-  else { reveal(); }
-  setTimeout(reveal, 300);
-})();
-</script>`;
-
-  const downloadHtml = project.generatedHtml.replace("</body>", revealScript + "\n</body>");
+  const downloadHtml = prepareDownloadHtml(project.generatedHtml);
 
   const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.pipe(res);
