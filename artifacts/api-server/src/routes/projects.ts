@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, projectsTable, templatesTable } from "@workspace/db";
 import { eq, ilike, or } from "drizzle-orm";
 import { injectPlaceholders } from "../utils/inject-placeholders";
+import { ZipArchive } from "archiver";
 import {
   ListProjectsQueryParams,
   CreateProjectBody,
@@ -351,13 +352,11 @@ router.get("/:id/download-zip", async (req, res): Promise<void> => {
     return;
   }
 
-  const archiver = (await import("archiver")).default;
-
   const slug = project.businessName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${slug}-demo.zip"`);
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.pipe(res);
 
   archive.append(project.generatedHtml, { name: "index.html" });
