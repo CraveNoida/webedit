@@ -31,21 +31,34 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     bar.querySelector('#wb-exit').onclick=exit;
   }
 
+  function deleteSelected(){
+    if(!sel) return;
+    var el=sel;
+    sel=null; saved=null;
+    el.removeAttribute('data-wj-selected'); el.contentEditable='false';
+    el.remove();
+    send(); idle();
+  }
+
+  var DEL_BTN='<button class="wb" id="wb-del" style="background:rgba(239,68,68,0.35);border-color:rgba(239,68,68,0.6);">&#x1F5D1; Delete</button>';
+
   function textBar(el){
-    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Editing Text</span><div class="ws"></div><button class="wb" id="wb-done">Done</button><button class="wb" id="wb-cancel">Cancel</button><div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
+    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Editing Text</span><div class="ws"></div><button class="wb" id="wb-done">Done</button><button class="wb" id="wb-cancel">Cancel</button>'+DEL_BTN+'<div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
     slabel=bar.querySelector('.sl');
     bar.querySelector('#wb-done').onclick=function(){ commit(); send(); idle(); };
     bar.querySelector('#wb-cancel').onclick=function(){ if(sel&&saved!==null) sel.innerHTML=saved; commit(); idle(); };
+    bar.querySelector('#wb-del').onclick=function(){ if(confirm('Delete this element?')) deleteSelected(); };
     bar.querySelector('#wb-exit').onclick=function(){ if(sel&&saved!==null) sel.innerHTML=saved; commit(); exit(); };
   }
 
   function imgBar(el){
     var src=(el.getAttribute('src')||'').replace(/"/g,'&quot;');
-    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Image</span><div class="ws"></div><input class="wi" id="wi-url" placeholder="Paste new image URL..." /><button class="wb" id="wb-replace">Replace</button><button class="wb" id="wb-cancel">Cancel</button><div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
+    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Image</span><div class="ws"></div><input class="wi" id="wi-url" placeholder="Paste new image URL..." /><button class="wb" id="wb-replace">Replace</button><button class="wb" id="wb-cancel">Cancel</button>'+DEL_BTN+'<div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
     slabel=bar.querySelector('.sl');
     var inp=document.getElementById('wi-url'); inp.value=el.getAttribute('src')||''; setTimeout(function(){ inp.focus(); inp.select(); },10);
     bar.querySelector('#wb-replace').onclick=function(){ var u=inp.value.trim(); if(u&&el){ el.src=u; el.removeAttribute('srcset'); } commit(); send(); idle(); };
     bar.querySelector('#wb-cancel').onclick=function(){ commit(); idle(); };
+    bar.querySelector('#wb-del').onclick=function(){ if(confirm('Delete this image?')) deleteSelected(); };
     bar.querySelector('#wb-exit').onclick=function(){ commit(); exit(); };
   }
 
