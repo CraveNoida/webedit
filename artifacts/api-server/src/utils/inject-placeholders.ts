@@ -9,27 +9,42 @@ export function injectPlaceholders(html: string): {
   const detected: Record<string, string> = {};
   const ph = new Set<string>();
 
-  // 1. Business name from <title> — skip if already injected
+  // 1. Business name — try <title> first, then <h1> as fallback
   const titleMatch = result.match(/<title>([^<]+)<\/title>/);
+  const h1Match = result.match(/<h1[^>]*>\s*(?:<[^>]+>)*\s*([^<]{3,}?)\s*(?:<\/[^>]+>)*\s*<\/h1>/i);
+
+  let extractedName: string | null = null;
+
   if (titleMatch && !titleMatch[1].includes("{{")) {
-    const businessName = titleMatch[1].trim().split(/\s*[—–|\-]\s*/)[0].trim();
-    if (businessName && businessName.length > 2) {
-      detected.businessName = businessName;
-      // Replace full name (case-insensitive)
-      result = result.replace(new RegExp(esc(businessName), "gi"), "{{businessName}}");
-      // Also replace shorter 2-word prefix if name is 3+ words (e.g. "Reyna Salon Academy" → also replace "Reyna Salon")
-      const words = businessName.split(/\s+/);
-      if (words.length >= 3) {
-        const shortName = words.slice(0, 2).join(" ");
-        result = result.replace(new RegExp(esc(shortName), "gi"), "{{businessName}}");
-      }
-      result = result.replace(/<title>[^<]*<\/title>/, "<title>{{seoTitle}}</title>");
-      result = result.replace(
-        /<meta\s+name="description"\s+content="[^"]*"/,
-        '<meta name="description" content="{{metaDescription}}"'
-      );
-      ph.add("{{businessName}}"); ph.add("{{seoTitle}}"); ph.add("{{metaDescription}}");
+    const candidate = titleMatch[1].trim().split(/\s*[—–|\-]\s*/)[0].trim();
+    if (candidate && candidate.length > 2) extractedName = candidate;
+  }
+
+  // Fallback: use <h1> content if title was generic or missing
+  if (!extractedName && h1Match && !h1Match[1].includes("{{")) {
+    const candidate = h1Match[1].replace(/<[^>]+>/g, "").trim();
+    if (candidate && candidate.length > 2 && candidate.split(/\s+/).length <= 6) {
+      extractedName = candidate;
     }
+  }
+
+  if (extractedName) {
+    const businessName = extractedName;
+    detected.businessName = businessName;
+    // Replace full name (case-insensitive)
+    result = result.replace(new RegExp(esc(businessName), "gi"), "{{businessName}}");
+    // Also replace shorter 2-word prefix if name is 3+ words (e.g. "Reyna Salon Academy" → also replace "Reyna Salon")
+    const words = businessName.split(/\s+/);
+    if (words.length >= 3) {
+      const shortName = words.slice(0, 2).join(" ");
+      result = result.replace(new RegExp(esc(shortName), "gi"), "{{businessName}}");
+    }
+    result = result.replace(/<title>[^<]*<\/title>/, "<title>{{seoTitle}}</title>");
+    result = result.replace(
+      /<meta\s+name="description"\s+content="[^"]*"/,
+      '<meta name="description" content="{{metaDescription}}"'
+    );
+    ph.add("{{businessName}}"); ph.add("{{seoTitle}}"); ph.add("{{metaDescription}}");
   }
 
   // 2. Phone numbers — Indian 10-digit mobile (skip if already injected)

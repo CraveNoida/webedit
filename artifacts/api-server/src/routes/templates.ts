@@ -36,17 +36,21 @@ router.post("/", async (req, res): Promise<void> => {
     return;
   }
 
+  // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately
+  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(body.data.htmlContent);
+  const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
+
   const [template] = await db
     .insert(templatesTable)
     .values({
       name: body.data.name,
       category: body.data.category,
       description: body.data.description ?? null,
-      htmlContent: body.data.htmlContent,
+      htmlContent: injectedHtml,
       cssContent: body.data.cssContent ?? null,
       jsContent: body.data.jsContent ?? null,
       thumbnailUrl: body.data.thumbnailUrl ?? null,
-      placeholders: body.data.placeholders ?? [],
+      placeholders: mergedPh,
     })
     .returning();
 

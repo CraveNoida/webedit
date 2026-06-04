@@ -224,16 +224,16 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  // Auto-inject placeholders if the template has none yet
-  if (!template.placeholders || template.placeholders.length === 0) {
-    const { html: injectedHtml, placeholders } = injectPlaceholders(template.htmlContent);
-    const [updated] = await db
-      .update(templatesTable)
-      .set({ htmlContent: injectedHtml, placeholders })
-      .where(eq(templatesTable.id, template.id))
-      .returning();
-    template = updated;
-  }
+  // Always run placeholder injection so hardcoded names/contacts are replaced
+  // injectPlaceholders is idempotent: guards inside skip already-replaced tokens
+  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(template.htmlContent);
+  const mergedPh = [...new Set([...(template.placeholders ?? []), ...detectedPh])];
+  const [updatedTemplate] = await db
+    .update(templatesTable)
+    .set({ htmlContent: injectedHtml, placeholders: mergedPh })
+    .where(eq(templatesTable.id, template.id))
+    .returning();
+  template = updatedTemplate;
 
   const generatedHtml = generateHtml(template, {
     businessName: project.businessName,
