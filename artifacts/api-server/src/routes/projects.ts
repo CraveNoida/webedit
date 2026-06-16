@@ -85,7 +85,10 @@ function prepareDownloadHtml(html: string): string {
 })();
 </script>`;
 
-  out = out.replace('<head>', '<head>\n' + revealScript);
+  // Guard: only inject if not already present (makes the function idempotent)
+  if (!out.includes('id="wj-reveal"')) {
+    out = out.replace('<head>', '<head>\n' + revealScript);
+  }
 
   return out;
 }
@@ -216,7 +219,13 @@ router.get("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(project);
+  // Always serve preview-ready HTML so existing projects don't show stuck loaders.
+  // prepareDownloadHtml is idempotent (wj-reveal script guards against double-inject).
+  if (project.generatedHtml) {
+    res.json({ ...project, generatedHtml: prepareDownloadHtml(project.generatedHtml) });
+  } else {
+    res.json(project);
+  }
 });
 
 router.put("/:id", async (req, res): Promise<void> => {
@@ -310,7 +319,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     .returning();
   template = updatedTemplate;
 
-  const generatedHtml = generateHtml(template, {
+  const rawHtml = generateHtml(template, {
     businessName: project.businessName,
     tagline: project.tagline ?? "",
     about: project.about ?? "",
@@ -328,6 +337,10 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     services: project.services ?? [],
     galleryImages: project.galleryImages ?? [],
   });
+
+  // Apply the same overlay-dismiss + reveal-script treatment used for ZIP download,
+  // so loading screens don't stay stuck in the preview iframe either.
+  const generatedHtml = prepareDownloadHtml(rawHtml);
 
   const [updated] = await db
     .update(projectsTable)
