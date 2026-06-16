@@ -24,6 +24,7 @@ import { ArrowLeft, Plus, X, Loader2, Wand2, CheckCircle2, AlertTriangle } from 
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
 import { FileUpload } from "@/components/file-upload";
+import { FolderImport, type FolderImportResult } from "@/components/folder-import";
 
 const COMMON_PLACEHOLDERS = [
   "{{businessName}}", "{{tagline}}", "{{about}}", "{{phone}}", "{{whatsapp}}",
@@ -134,6 +135,13 @@ export default function TemplateEditor() {
     }
   }
 
+  function handleFolderImport({ html, css, js }: FolderImportResult) {
+    form.setValue("htmlContent", html, { shouldDirty: true });
+    form.setValue("cssContent", css, { shouldDirty: true });
+    form.setValue("jsContent", js, { shouldDirty: true });
+    setHasExternalCss(/<link[^>]+href="(?!https?:\/\/|\/\/)([^"']+\.css)"/.test(html));
+  }
+
   async function handleInject() {
     if (!id) return;
     setIsInjecting(true);
@@ -225,6 +233,18 @@ export default function TemplateEditor() {
           </AlertDescription>
         </Alert>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            Import from Folder
+            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">recommended</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FolderImport onImport={handleFolderImport} />
+        </CardContent>
+      </Card>
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
