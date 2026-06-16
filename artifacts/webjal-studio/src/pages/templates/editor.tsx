@@ -57,6 +57,9 @@ export default function TemplateEditor() {
   const [isInjecting, setIsInjecting] = useState(false);
   const [detectedFields, setDetectedFields] = useState<Record<string, string> | null>(null);
   const [hasExternalCss, setHasExternalCss] = useState(false);
+  const [importedHtmlFiles, setImportedHtmlFiles] = useState<string[]>([]);
+  const [importedCssFiles, setImportedCssFiles] = useState<string[]>([]);
+  const [importedJsFiles, setImportedJsFiles] = useState<string[]>([]);
 
   const { data: template, isLoading } = useGetTemplate(
     Number(id),
@@ -135,11 +138,14 @@ export default function TemplateEditor() {
     }
   }
 
-  function handleFolderImport({ html, css, js }: FolderImportResult) {
+  function handleFolderImport({ html, css, js, mergedHtmlFiles, mergedCssFiles, mergedJsFiles }: FolderImportResult) {
     form.setValue("htmlContent", html, { shouldDirty: true });
     form.setValue("cssContent", css, { shouldDirty: true });
     form.setValue("jsContent", js, { shouldDirty: true });
     setHasExternalCss(/<link[^>]+href="(?!https?:\/\/|\/\/)([^"']+\.css)"/.test(html));
+    setImportedHtmlFiles(mergedHtmlFiles);
+    setImportedCssFiles(mergedCssFiles);
+    setImportedJsFiles(mergedJsFiles);
   }
 
   async function handleInject() {
@@ -323,7 +329,16 @@ export default function TemplateEditor() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">HTML Content</CardTitle>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base">HTML Content</CardTitle>
+                    {importedHtmlFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {importedHtmlFiles.map((f) => (
+                          <span key={f} className="text-[10px] font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">{f}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <FormField
@@ -349,7 +364,16 @@ export default function TemplateEditor() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">CSS (optional)</CardTitle>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base">CSS (optional)</CardTitle>
+                    {importedCssFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {importedCssFiles.map((f) => (
+                          <span key={f} className="text-[10px] font-mono bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">{f}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <FormField
@@ -375,7 +399,16 @@ export default function TemplateEditor() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">JavaScript (optional)</CardTitle>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base">JavaScript (optional)</CardTitle>
+                    {importedJsFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {importedJsFiles.map((f) => (
+                          <span key={f} className="text-[10px] font-mono bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">{f}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <FormField

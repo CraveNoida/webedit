@@ -128,11 +128,11 @@ async function processFiles(
   imageRecs: ImageRec[],
   setMsg: (m: string) => void,
   toast: ReturnType<typeof useToast>["toast"]
-): Promise<{ html: string; css: string; js: string; summary: string[] }> {
+): Promise<{ html: string; css: string; js: string; summary: string[]; mergedHtmlFiles: string[]; mergedCssFiles: string[]; mergedJsFiles: string[] }> {
   const summary: string[] = [];
 
   // 1. Upload all images in parallel
-  setMsg(`Uploading ${imageRecs.length} image(s)…`);
+  if (imageRecs.length > 0) setMsg(`Uploading ${imageRecs.length} image(s)…`);
   const imageMap = new Map<string, string>();
   let uploadedCount = 0;
   await Promise.all(
@@ -146,43 +146,45 @@ async function processFiles(
   );
   if (uploadedCount > 0) summary.push(`${uploadedCount} image(s) uploaded`);
 
-  // 2. Read all HTML files
+  // 2. Read all HTML files sequentially (preserve order)
   setMsg(`Reading ${htmlRecs.length} HTML file(s)…`);
-  const htmlContents = await Promise.all(
-    htmlRecs.map(async (r) => ({ name: r.name, content: await r.getText() }))
-  );
+  const htmlContents: { name: string; content: string }[] = [];
+  for (const r of htmlRecs) {
+    htmlContents.push({ name: r.name, content: await r.getText() });
+  }
   const mergedHtml = mergeHtmlFiles(htmlContents);
-  if (htmlRecs.length > 0) summary.push(`HTML: ${htmlRecs.map((r) => r.name).join(", ")}`);
+  const mergedHtmlFiles = htmlRecs.map((r) => r.name);
+  if (htmlRecs.length > 0) summary.push(`HTML: ${mergedHtmlFiles.join(" + ")}`);
 
   // 3. Read all CSS files
   setMsg(`Reading ${cssRecs.length} CSS file(s)…`);
-  const cssChunks = await Promise.all(
-    cssRecs.map(async (r) => {
-      const t = await r.getText();
-      return t.trim() ? `/* ── ${r.name} ── */\n${t}` : "";
-    })
-  );
-  const css = cssChunks.filter(Boolean).join("\n\n");
-  if (cssRecs.length > 0) summary.push(`CSS: ${cssRecs.map((r) => r.name).join(", ")}`);
+  const cssChunks: string[] = [];
+  for (const r of cssRecs) {
+    const t = await r.getText();
+    if (t.trim()) cssChunks.push(`/* ── ${r.name} ── */\n${t}`);
+  }
+  const css = cssChunks.join("\n\n");
+  const mergedCssFiles = cssRecs.map((r) => r.name);
+  if (cssRecs.length > 0) summary.push(`CSS: ${mergedCssFiles.join(" + ")}`);
 
   // 4. Read all JS files
   setMsg(`Reading ${jsRecs.length} JS file(s)…`);
-  const jsChunks = await Promise.all(
-    jsRecs.map(async (r) => {
-      const t = await r.getText();
-      return t.trim() ? `/* ── ${r.name} ── */\n${t}` : "";
-    })
-  );
-  const js = jsChunks.filter(Boolean).join("\n\n");
-  if (jsRecs.length > 0) summary.push(`JS: ${jsRecs.map((r) => r.name).join(", ")}`);
+  const jsChunks: string[] = [];
+  for (const r of jsRecs) {
+    const t = await r.getText();
+    if (t.trim()) jsChunks.push(`/* ── ${r.name} ── */\n${t}`);
+  }
+  const js = jsChunks.join("\n\n");
+  const mergedJsFiles = jsRecs.map((r) => r.name);
+  if (jsRecs.length > 0) summary.push(`JS: ${mergedJsFiles.join(" + ")}`);
 
   // 5. Replace image refs in HTML and CSS, strip local <link>/<script src>
-  setMsg("Replacing image references…");
+  if (uploadedCount > 0) setMsg("Replacing image references…");
   const html = stripLocalRefs(replaceRefs(mergedHtml, imageMap));
   const processedCss = replaceRefs(css, imageMap);
   if (uploadedCount > 0) summary.push("Image references updated in HTML/CSS");
 
-  return { html, css: processedCss, js, summary };
+  return { html, css: processedCss, js, summary, mergedHtmlFiles, mergedCssFiles, mergedJsFiles };
 }
 
 // ── Exported types ────────────────────────────────────────────────────────────
@@ -191,6 +193,9 @@ export interface FolderImportResult {
   html: string;
   css: string;
   js: string;
+  mergedHtmlFiles: string[];
+  mergedCssFiles: string[];
+  mergedJsFiles: string[];
 }
 
 interface FolderImportProps {
@@ -282,11 +287,11 @@ export function FolderImport({ onImport }: FolderImportProps) {
     }
   }
 
-  function finish({ html, css, js, summary }: { html: string; css: string; js: string; summary: string[] }) {
+  function finish(result: { html: string; css: string; js: string; summary: string[]; mergedHtmlFiles: string[]; mergedCssFiles: string[]; mergedJsFiles: string[] }) {
     setStatus("done");
     setMsg("");
-    setSummary(summary);
-    onImport({ html, css, js });
+    setSummary(result.summary);
+    onImport({ html: result.html, css: result.css, js: result.js, mergedHtmlFiles: result.mergedHtmlFiles, mergedCssFiles: result.mergedCssFiles, mergedJsFiles: result.mergedJsFiles });
     toast({ title: "Folder imported! Review the code below and save." });
   }
 
