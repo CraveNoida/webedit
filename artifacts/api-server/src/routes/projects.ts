@@ -26,6 +26,11 @@ const router = Router();
 function prepareDownloadHtml(html: string): string {
   let out = html;
 
+  // Replace older preview guards so existing generated projects receive the newest fix.
+  out = out
+    .replace(/<style\b[^>]*\bid=["']wj-reveal-style["'][^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script\b[^>]*\bid=["']wj-reveal["'][^>]*>[\s\S]*?<\/script>/gi, "");
+
   // 1. Strip relative-path <link> stylesheets (not http/https/protocol-relative)
   out = out.replace(/<link\b[^>]*\bhref=["'](?!https?:\/\/|\/\/)([^"']+\.css)["'][^>]*>/gi, '');
 
@@ -36,13 +41,59 @@ function prepareDownloadHtml(html: string): string {
   out = out.replace(/(<div\b[^>]*\bid=["']loader["'])([^>]*>)/gi, '$1 style="display:none!important"$2');
   out = out.replace(/(<div\b[^>]*\bclass=["'][^"']*loading[-_]screen[^"']*["'])([^>]*>)/gi, '$1 style="display:none!important"$2');
 
+  const revealStyle = `<style id="wj-reveal-style">
+#loader,
+#preloader,
+#loading-screen,
+#splash,
+#overlay-loader,
+.preloader,
+.pre-loader,
+.page-loader,
+.page-loading,
+.site-loader,
+.loader-wrapper,
+.loading-screen,
+.loading-overlay,
+.loader-overlay,
+.spinner-wrapper,
+.pace,
+.pace-active,
+.pace-inactive {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+html,
+body {
+  overflow: auto !important;
+  cursor: auto !important;
+}
+[data-aos],
+.wow,
+.animated,
+[class*="fade"],
+[class*="reveal"],
+[class*="scroll"] {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+</style>`;
+
   // 4. Inject a reveal script into <head> that:
   //    - Marks body with .no-gsap so CSS fallbacks kick in
   //    - Polls every 100ms for 5s, forcing near-invisible elements visible
   //    (covers GSAP inline-style overrides, AOS, WOW.js, ScrollTrigger, custom JS)
   const revealScript = `<script id="wj-reveal">
 (function(){
-  var LOADERS=['#loader','.loading-screen','#loading-screen','#preloader','.preloader','#splash','#overlay-loader'];
+  var LOADERS=[
+    '#loader','#preloader','#loading-screen','#splash','#overlay-loader',
+    '.preloader','.pre-loader','.page-loader','.page-loading','.site-loader',
+    '.loader-wrapper','.loading-screen','.loading-overlay','.loader-overlay',
+    '.spinner-wrapper','.pace','.pace-active','.pace-inactive'
+  ];
   var SHOW_SELS=[
     'section','article','header','footer','main','nav',
     '.hero-subtitle','.hero-title','.hero-desc','.hero-btns','.hero-glass-card',
@@ -52,12 +103,46 @@ function prepareDownloadHtml(html: string): string {
     '.testi-track','.stat-num','.footer-grid > div',
     '[data-aos]','.wow','.animated','[class*="fade"]','[class*="reveal"]','[class*="scroll"]'
   ];
+  function looksLikeBlockingLoader(el){
+    var text=(el.textContent||'').trim().toLowerCase();
+    var marker=((el.id||'')+' '+(el.className||'')).toLowerCase();
+    if(!/(loader|loading|preloader|pre-loader|spinner|splash)/.test(marker)){ return false; }
+    var cs=window.getComputedStyle(el);
+    var rect=el.getBoundingClientRect();
+    var highLayer=parseInt(cs.zIndex||'0',10)>10;
+    var big=rect.width>window.innerWidth*0.35&&rect.height>window.innerHeight*0.25;
+    var fixedOrAbsolute=cs.position==='fixed'||cs.position==='absolute'||cs.position==='sticky';
+    return fixedOrAbsolute||highLayer||big||text==='loading'||text==='loading...';
+  }
   function fix(){
     // Remove loading overlays
-    LOADERS.forEach(function(s){ var el=document.querySelector(s); if(el){ el.style.setProperty('display','none','important'); } });
+    LOADERS.forEach(function(s){
+      document.querySelectorAll(s).forEach(function(el){
+        el.style.setProperty('display','none','important');
+        el.style.setProperty('opacity','0','important');
+        el.style.setProperty('visibility','hidden','important');
+        el.style.setProperty('pointer-events','none','important');
+      });
+    });
+    document.querySelectorAll('[id*="loader" i],[class*="loader" i],[id*="loading" i],[class*="loading" i],[id*="preloader" i],[class*="preloader" i],[class*="spinner" i]').forEach(function(el){
+      try{
+        if(looksLikeBlockingLoader(el)){
+          el.style.setProperty('display','none','important');
+          el.style.setProperty('opacity','0','important');
+          el.style.setProperty('visibility','hidden','important');
+          el.style.setProperty('pointer-events','none','important');
+        }
+      }catch(e){}
+    });
+    if(!document.body){ return; }
     // Restore body scroll and cursor
     document.body.style.overflow='auto';
     document.body.style.cursor='auto';
+    document.documentElement.style.overflow='auto';
+    ['loading','preload','preloading','is-loading','no-scroll','overflow-hidden'].forEach(function(c){
+      document.body.classList.remove(c);
+      document.documentElement.classList.remove(c);
+    });
     // Add no-gsap class so CSS fallbacks apply
     document.body.classList.add('no-gsap');
     // Force all animation-hidden elements visible
@@ -85,15 +170,53 @@ function prepareDownloadHtml(html: string): string {
 })();
 </script>`;
 
-  // Guard: only inject if not already present (makes the function idempotent)
-  if (!out.includes('id="wj-reveal"')) {
-    out = out.replace('<head>', '<head>\n' + revealScript);
+  const revealAssets = `${revealStyle}\n${revealScript}`;
+
+  if (/<head[^>]*>/i.test(out)) {
+    out = out.replace(/<head[^>]*>/i, (tag) => `${tag}\n${revealAssets}`);
+  } else if (/<html[^>]*>/i.test(out)) {
+    out = out.replace(/<html[^>]*>/i, (tag) => `${tag}\n<head>\n${revealAssets}\n</head>`);
+  } else {
+    out = `${revealAssets}\n${out}`;
   }
 
   return out;
 }
 
-function generateHtml(template: { htmlContent: string; cssContent?: string | null; jsContent?: string | null }, data: Record<string, string | string[]>): string {
+type ProjectTemplate = {
+  id: number;
+  htmlContent: string;
+  cssContent?: string | null;
+  jsContent?: string | null;
+  placeholders?: string[] | null;
+};
+
+type ProjectData = {
+  businessName: string;
+  tagline?: string | null;
+  about?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  address?: string | null;
+  googleMapsLink?: string | null;
+  instagramLink?: string | null;
+  ctaText?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  logoUrl?: string | null;
+  heroImageUrl?: string | null;
+  services?: string[] | null;
+  packages?: unknown;
+  galleryImages?: string[] | null;
+};
+
+function getProjectValue(data: ProjectData, key: keyof ProjectData, fallback = ""): string {
+  const value = data[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+function generateHtml(template: { htmlContent: string; cssContent?: string | null; jsContent?: string | null }, data: ProjectData): string {
   let html = template.htmlContent;
 
   // Inject CSS and JS if present
@@ -106,26 +229,26 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
 
   // Replace all placeholders
   const placeholders: Record<string, string> = {
-    "{{businessName}}": String(data.businessName ?? ""),
-    "{{tagline}}": String(data.tagline ?? ""),
-    "{{about}}": String(data.about ?? ""),
-    "{{phone}}": String(data.phone ?? ""),
-    "{{whatsapp}}": String(data.whatsapp ?? ""),
-    "{{email}}": String(data.email ?? ""),
-    "{{address}}": String(data.address ?? ""),
-    "{{googleMapsLink}}": String(data.googleMapsLink ?? ""),
-    "{{instagramLink}}": String(data.instagramLink ?? ""),
-    "{{ctaText}}": String(data.ctaText ?? "Get In Touch"),
-    "{{primaryColor}}": String(data.primaryColor ?? "#4f46e5"),
-    "{{secondaryColor}}": String(data.secondaryColor ?? "#7c3aed"),
-    "{{logoUrl}}": String(data.logoUrl ?? ""),
-    "{{heroImage}}": String(data.heroImageUrl ?? ""),
-    "{{heroImageUrl}}": String(data.heroImageUrl ?? ""),
-    "{{whatsappLink}}": `https://wa.me/${String(data.whatsapp ?? "").replace(/[^0-9]/g, "")}`,
-    "{{phoneLink}}": `tel:${String(data.phone ?? "")}`,
-    "{{emailLink}}": `mailto:${String(data.email ?? "")}`,
-    "{{seoTitle}}": `${String(data.businessName ?? "")} - ${String(data.tagline ?? "Welcome")}`,
-    "{{metaDescription}}": String(data.about ?? `Welcome to ${String(data.businessName ?? "")}`),
+    "{{businessName}}": getProjectValue(data, "businessName"),
+    "{{tagline}}": getProjectValue(data, "tagline"),
+    "{{about}}": getProjectValue(data, "about"),
+    "{{phone}}": getProjectValue(data, "phone"),
+    "{{whatsapp}}": getProjectValue(data, "whatsapp"),
+    "{{email}}": getProjectValue(data, "email"),
+    "{{address}}": getProjectValue(data, "address"),
+    "{{googleMapsLink}}": getProjectValue(data, "googleMapsLink"),
+    "{{instagramLink}}": getProjectValue(data, "instagramLink"),
+    "{{ctaText}}": getProjectValue(data, "ctaText", "Get In Touch"),
+    "{{primaryColor}}": getProjectValue(data, "primaryColor", "#4f46e5"),
+    "{{secondaryColor}}": getProjectValue(data, "secondaryColor", "#7c3aed"),
+    "{{logoUrl}}": getProjectValue(data, "logoUrl"),
+    "{{heroImage}}": getProjectValue(data, "heroImageUrl"),
+    "{{heroImageUrl}}": getProjectValue(data, "heroImageUrl"),
+    "{{whatsappLink}}": `https://wa.me/${getProjectValue(data, "whatsapp").replace(/[^0-9]/g, "")}`,
+    "{{phoneLink}}": `tel:${getProjectValue(data, "phone")}`,
+    "{{emailLink}}": `mailto:${getProjectValue(data, "email")}`,
+    "{{seoTitle}}": `${getProjectValue(data, "businessName")} - ${getProjectValue(data, "tagline", "Welcome")}`,
+    "{{metaDescription}}": getProjectValue(data, "about", `Welcome to ${getProjectValue(data, "businessName")}`),
   };
 
   // Replace services as HTML list items
@@ -137,11 +260,50 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
   const gallery = Array.isArray(data.galleryImages) ? data.galleryImages as string[] : [];
   placeholders["{{galleryImages}}"] = gallery.map((url) => `<img src="${url}" alt="Gallery" />`).join("\n");
 
+  const packages = Array.isArray(data.packages) ? data.packages as Array<Record<string, unknown>> : [];
+  placeholders["{{packages}}"] = packages.map((pkg) => {
+    const name = String(pkg.name ?? "");
+    const price = String(pkg.price ?? "");
+    const description = String(pkg.description ?? "");
+    return `<div class="package-item"><h3>${name}</h3><p>${description}</p><strong>${price}</strong></div>`;
+  }).join("\n");
+
   for (const [key, value] of Object.entries(placeholders)) {
     html = html.replaceAll(key, value);
   }
 
   return html;
+}
+
+async function prepareTemplateForProject(template: ProjectTemplate): Promise<ProjectTemplate> {
+  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(template.htmlContent);
+  const mergedPh = [...new Set([...(template.placeholders ?? []), ...detectedPh])];
+
+  if (injectedHtml === template.htmlContent && mergedPh.length === (template.placeholders ?? []).length) {
+    return template;
+  }
+
+  const [updatedTemplate] = await db
+    .update(templatesTable)
+    .set({ htmlContent: injectedHtml, placeholders: mergedPh })
+    .where(eq(templatesTable.id, template.id))
+    .returning();
+
+  return updatedTemplate;
+}
+
+async function generatePreparedHtmlForProject(project: ProjectData & { templateId?: number | null }): Promise<string | null> {
+  if (!project.templateId) return null;
+
+  const [templateRow] = await db
+    .select()
+    .from(templatesTable)
+    .where(eq(templatesTable.id, project.templateId));
+
+  if (!templateRow) return null;
+
+  const template = await prepareTemplateForProject(templateRow);
+  return prepareDownloadHtml(generateHtml(template, project));
 }
 
 router.get("/", async (req, res): Promise<void> => {
@@ -262,6 +424,22 @@ router.put("/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const didExplicitlyUpdateGeneratedHtml = body.data.generatedHtml !== undefined;
+  const didUpdateDetails = Object.keys(updateData).some((field) => field !== "generatedHtml" && field !== "status");
+
+  if (didUpdateDetails && !didExplicitlyUpdateGeneratedHtml && project.templateId) {
+    const generatedHtml = await generatePreparedHtmlForProject(project);
+    if (generatedHtml) {
+      const [regenerated] = await db
+        .update(projectsTable)
+        .set({ generatedHtml, status: "generated" })
+        .where(eq(projectsTable.id, project.id))
+        .returning();
+      res.json(regenerated);
+      return;
+    }
+  }
+
   res.json(project);
 });
 
@@ -298,49 +476,18 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  let [template] = await db
+  const [templateRow] = await db
     .select()
     .from(templatesTable)
     .where(eq(templatesTable.id, project.templateId));
 
-  if (!template) {
+  if (!templateRow) {
     res.status(404).json({ error: "Template not found" });
     return;
   }
 
-  // Always run placeholder injection so hardcoded names/contacts are replaced
-  // injectPlaceholders is idempotent: guards inside skip already-replaced tokens
-  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(template.htmlContent);
-  const mergedPh = [...new Set([...(template.placeholders ?? []), ...detectedPh])];
-  const [updatedTemplate] = await db
-    .update(templatesTable)
-    .set({ htmlContent: injectedHtml, placeholders: mergedPh })
-    .where(eq(templatesTable.id, template.id))
-    .returning();
-  template = updatedTemplate;
-
-  const rawHtml = generateHtml(template, {
-    businessName: project.businessName,
-    tagline: project.tagline ?? "",
-    about: project.about ?? "",
-    phone: project.phone ?? "",
-    whatsapp: project.whatsapp ?? "",
-    email: project.email ?? "",
-    address: project.address ?? "",
-    googleMapsLink: project.googleMapsLink ?? "",
-    instagramLink: project.instagramLink ?? "",
-    ctaText: project.ctaText ?? "Get In Touch",
-    primaryColor: project.primaryColor ?? "#4f46e5",
-    secondaryColor: project.secondaryColor ?? "#7c3aed",
-    logoUrl: project.logoUrl ?? "",
-    heroImageUrl: project.heroImageUrl ?? "",
-    services: project.services ?? [],
-    galleryImages: project.galleryImages ?? [],
-  });
-
-  // Apply the same overlay-dismiss + reveal-script treatment used for ZIP download,
-  // so loading screens don't stay stuck in the preview iframe either.
-  const generatedHtml = prepareDownloadHtml(rawHtml);
+  const template = await prepareTemplateForProject(templateRow);
+  const generatedHtml = prepareDownloadHtml(generateHtml(template, project));
 
   const [updated] = await db
     .update(projectsTable)

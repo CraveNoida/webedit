@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { FolderOpen, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp"]);
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp", ".avif"]);
 const CSS_EXTS = new Set([".css"]);
 const JS_EXTS = new Set([".js"]);
 const HTML_EXTS = new Set([".html", ".htm"]);
@@ -93,10 +93,30 @@ function mergeHtmlFiles(files: { name: string; content: string }[]): string {
 // ── Reference replacement ─────────────────────────────────────────────────────
 
 function buildImageMap(relPath: string, url: string, map: Map<string, string>) {
-  map.set(relPath, url);
-  map.set(`./${relPath}`, url);
-  const filename = relPath.split("/").pop()!;
-  if (!map.has(filename)) map.set(filename, url);
+  const normalized = relPath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const filename = normalized.split("/").pop()!;
+  const variants = new Set([
+    normalized,
+    `./${normalized}`,
+    `/${normalized}`,
+    `../${normalized}`,
+    filename,
+    `./${filename}`,
+    `../${filename}`,
+  ]);
+
+  const segments = normalized.split("/");
+  for (let i = 1; i < segments.length; i++) {
+    const suffix = segments.slice(i).join("/");
+    variants.add(suffix);
+    variants.add(`./${suffix}`);
+    variants.add(`/${suffix}`);
+    variants.add(`../${suffix}`);
+  }
+
+  variants.forEach((variant) => {
+    if (!map.has(variant)) map.set(variant, url);
+  });
 }
 
 function replaceRefs(content: string, map: Map<string, string>): string {
@@ -104,8 +124,9 @@ function replaceRefs(content: string, map: Map<string, string>): string {
   map.forEach((newUrl, orig) => {
     const esc = orig.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     out = out
-      .replace(new RegExp(`((?:src|href|data-src|data-bg)=["'])${esc}(["'])`, "gi"), `$1${newUrl}$2`)
-      .replace(new RegExp(`(url\\(["']?)${esc}(["']?\\))`, "gi"), `$1${newUrl}$2`);
+      .replace(new RegExp(`((?:src|href|data-src|data-bg)=["'])${esc}((?:[?#][^"']*)?["'])`, "gi"), `$1${newUrl}$2`)
+      .replace(new RegExp(`((?:srcset)=["'][^"']*)${esc}((?:[?#][^"',\\s]*)?[^"']*["'])`, "gi"), `$1${newUrl}$2`)
+      .replace(new RegExp(`(url\\(["']?)${esc}((?:[?#][^"')\\s]*)?["']?\\))`, "gi"), `$1${newUrl}$2`);
   });
   return out;
 }

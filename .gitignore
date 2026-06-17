@@ -28,6 +28,10 @@ node_modules
 !.vscode/extensions.json
 
 # misc
+/.env.local
+/.env.*.local
+/uploads/
+/artifacts/api-server/uploads/
 /.sass-cache
 /connect.lock
 /coverage

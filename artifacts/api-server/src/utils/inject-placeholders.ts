@@ -1,5 +1,9 @@
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+function isImportedAsset(url: string): boolean {
+  return /^\/?api\/uploads\//i.test(url) || /^https?:\/\/[^/]+\/api\/uploads\//i.test(url);
+}
+
 export function injectPlaceholders(html: string): {
   html: string;
   placeholders: string[];
@@ -80,13 +84,13 @@ export function injectPlaceholders(html: string): {
 
   // 4. Hero / background image
   const bgMatch = result.match(/background(?:-image)?\s*:\s*url\(['"]?([^'")\s]+)['"]?\)/);
-  if (bgMatch && !bgMatch[1].includes("{{")) {
+  if (bgMatch && !bgMatch[1].includes("{{") && !isImportedAsset(bgMatch[1])) {
     detected.heroImageUrl = bgMatch[1];
     result = result.replace(new RegExp(esc(bgMatch[1]), "g"), "{{heroImageUrl}}");
     ph.add("{{heroImageUrl}}");
   } else {
     const imgMatch = result.match(/<img[^>]+src="([^"]+)"/);
-    if (imgMatch && !imgMatch[1].includes("{{") && !/cdnjs|font|icon|svg|data:/.test(imgMatch[1])) {
+    if (imgMatch && !imgMatch[1].includes("{{") && !isImportedAsset(imgMatch[1]) && !/cdnjs|font|icon|svg|data:/.test(imgMatch[1])) {
       detected.heroImageUrl = imgMatch[1];
       result = result.replace(imgMatch[1], "{{heroImageUrl}}");
       ph.add("{{heroImageUrl}}");
@@ -97,7 +101,7 @@ export function injectPlaceholders(html: string): {
   const logoMatch =
     result.match(/<img[^>]+class="[^"]*logo[^"]*"[^>]+src="([^"]+)"/i) ??
     result.match(/<img[^>]+src="([^"]+)"[^>]+class="[^"]*logo[^"]*"/i);
-  if (logoMatch && !logoMatch[1].includes("{{")) {
+  if (logoMatch && !logoMatch[1].includes("{{") && !isImportedAsset(logoMatch[1])) {
     detected.logoUrl = logoMatch[1];
     result = result.replace(new RegExp(esc(logoMatch[1]), "g"), "{{logoUrl}}");
     ph.add("{{logoUrl}}");
