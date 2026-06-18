@@ -65,6 +65,7 @@ export default function TemplateEditor() {
   const [importedHtmlFiles, setImportedHtmlFiles] = useState<string[]>([]);
   const [importedCssFiles, setImportedCssFiles] = useState<string[]>([]);
   const [importedJsFiles, setImportedJsFiles] = useState<string[]>([]);
+  const [submitError, setSubmitError] = useState("");
 
   const { data: template, isLoading } = useGetTemplate(
     Number(id),
@@ -104,14 +105,17 @@ export default function TemplateEditor() {
   const createMutation = useCreateTemplate({
     mutation: {
       onSuccess: () => {
+        setSubmitError("");
         queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey() });
         toast({ title: "Template created successfully" });
         setLocation("/templates");
       },
       onError: (error) => {
+        const message = errorMessage(error, "Please check the template fields and try again.");
+        setSubmitError(message);
         toast({
           title: "Failed to create template",
-          description: errorMessage(error, "Please check the template fields and try again."),
+          description: message,
           variant: "destructive",
         });
       },
@@ -121,15 +125,18 @@ export default function TemplateEditor() {
   const updateMutation = useUpdateTemplate({
     mutation: {
       onSuccess: () => {
+        setSubmitError("");
         queryClient.invalidateQueries({ queryKey: getListTemplatesQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetTemplateQueryKey(Number(id)) });
         toast({ title: "Template updated successfully" });
         setLocation("/templates");
       },
       onError: (error) => {
+        const message = errorMessage(error, "Please check the template fields and try again.");
+        setSubmitError(message);
         toast({
           title: "Failed to update template",
-          description: errorMessage(error, "Please check the template fields and try again."),
+          description: message,
           variant: "destructive",
         });
       },
@@ -139,6 +146,7 @@ export default function TemplateEditor() {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   function onSubmit(values: FormValues) {
+    setSubmitError("");
     const data = {
       ...values,
       placeholders,
@@ -253,6 +261,15 @@ export default function TemplateEditor() {
               ))}
             </div>
             <p className="text-xs mt-1 text-green-700 dark:text-green-300">Now create a project with this template and fill in your client's details.</p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {submitError && (
+        <Alert className="border-red-300 bg-red-50 dark:bg-red-900/20">
+          <AlertTriangle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800 dark:text-red-200 text-sm">
+            {submitError}
           </AlertDescription>
         </Alert>
       )}

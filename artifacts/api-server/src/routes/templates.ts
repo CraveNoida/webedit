@@ -18,6 +18,11 @@ function cleanText(value: string | undefined): string | undefined {
   return value?.replace(/\u0000/g, "");
 }
 
+function serverErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  return "Unknown server error";
+}
+
 router.get("/", async (req, res): Promise<void> => {
   const query = ListTemplatesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -64,7 +69,9 @@ router.post("/", async (req, res): Promise<void> => {
     res.status(201).json(template);
   } catch (err) {
     logger.error({ err }, "Failed to create template");
-    res.status(500).json({ error: "Failed to create template. Check the server logs for details." });
+    res.status(500).json({
+      error: `Failed to create template: ${serverErrorMessage(err)}`,
+    });
   }
 });
 
