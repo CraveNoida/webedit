@@ -5,10 +5,25 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
-const allowedOrigins = process.env["CORS_ORIGIN"]
-  ?.split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = new Set([
+  "https://webedit-482.pages.dev",
+  "https://webedit.pages.dev",
+  ...(process.env["CORS_ORIGIN"]
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean) ?? []),
+]);
+
+function isAllowedOrigin(origin: string): boolean {
+  if (allowedOrigins.has(origin)) return true;
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === "https:" && hostname.endsWith(".pages.dev");
+  } catch {
+    return false;
+  }
+}
 
 app.use(
   pinoHttp({
@@ -29,7 +44,18 @@ app.use(
     },
   }),
 );
-app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : undefined));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
+  }),
+);
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
