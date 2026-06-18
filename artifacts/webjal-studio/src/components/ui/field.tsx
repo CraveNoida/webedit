@@ -200,13 +200,15 @@ function FieldError({
       return null
     }
 
-    if (errors?.length === 1 && errors[0]?.message) {
-      return errors[0].message
+    const errorList = Array.isArray(errors) ? errors : []
+
+    if (errorList.length === 1 && errorList[0]?.message) {
+      return errorList[0].message
     }
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {errors.map(
+        {errorList.map(
           (error, index) =>
             error?.message && <li key={index}>{error.message}</li>
         )}

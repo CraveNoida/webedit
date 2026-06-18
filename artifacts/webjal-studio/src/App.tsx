@@ -21,8 +21,8 @@ const queryClient = new QueryClient({
   },
 });
 
-class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; stack: string }> {
+  state: { error: Error | null; stack: string } = { error: null, stack: "" };
 
   static getDerivedStateFromError(error: Error) {
     return { error };
@@ -30,6 +30,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("App render failed", error, info);
+    this.setState({ stack: info.componentStack ?? "" });
   }
 
   render() {
@@ -44,6 +45,11 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error
             <pre className="mt-4 overflow-auto rounded bg-gray-950 p-4 text-xs text-gray-100">
               {this.state.error.message}
             </pre>
+            {this.state.stack && (
+              <pre className="mt-3 max-h-80 overflow-auto rounded bg-gray-100 p-4 text-xs text-gray-700">
+                {this.state.stack}
+              </pre>
+            )}
           </div>
         </div>
       );

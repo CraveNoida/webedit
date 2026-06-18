@@ -86,11 +86,12 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const imageList = Array.isArray(images) ? images : [];
 
   function addUrl() {
     const trimmed = urlInput.trim();
     if (trimmed) {
-      onChange([...images, trimmed]);
+      onChange([...imageList, trimmed]);
       setUrlInput("");
     }
   }
@@ -101,7 +102,7 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
     setIsUploading(true);
     const results = await Promise.all(files.map((f) => uploadFile(f, toast)));
     const urls = results.filter((u): u is string => u !== null);
-    if (urls.length) onChange([...images, ...urls]);
+    if (urls.length) onChange([...imageList, ...urls]);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -151,9 +152,9 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
         </Button>
       </div>
 
-      {images.length > 0 && (
+      {imageList.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {images.map((img, i) => (
+          {imageList.map((img, i) => (
             <div key={i} className="relative group">
               <img
                 src={img}
@@ -174,7 +175,7 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
               </div>
               <button
                 type="button"
-                onClick={() => onChange(images.filter((_, j) => j !== i))}
+                onClick={() => onChange(imageList.filter((_, j) => j !== i))}
                 className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full h-4 w-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <X className="h-2.5 w-2.5" />

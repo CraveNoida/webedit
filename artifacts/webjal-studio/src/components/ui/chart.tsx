@@ -130,13 +130,14 @@ const ChartTooltipContent = React.forwardRef<
     ref
   ) => {
     const { config } = useChart()
+    const payloadList = Array.isArray(payload) ? payload : []
 
     const tooltipLabel = React.useMemo(() => {
-      if (hideLabel || !payload?.length) {
+      if (hideLabel || payloadList.length === 0) {
         return null
       }
 
-      const [item] = payload
+      const [item] = payloadList
       const key = `${labelKey || item?.dataKey || item?.name || "value"}`
       const itemConfig = getPayloadConfigFromPayload(config, item, key)
       const value =
@@ -147,7 +148,7 @@ const ChartTooltipContent = React.forwardRef<
       if (labelFormatter) {
         return (
           <div className={cn("font-medium", labelClassName)}>
-            {labelFormatter(value, payload)}
+            {labelFormatter(value, payloadList)}
           </div>
         )
       }
@@ -160,18 +161,18 @@ const ChartTooltipContent = React.forwardRef<
     }, [
       label,
       labelFormatter,
-      payload,
+      payloadList,
       hideLabel,
       labelClassName,
       config,
       labelKey,
     ])
 
-    if (!active || !payload?.length) {
+    if (!active || payloadList.length === 0) {
       return null
     }
 
-    const nestLabel = payload.length === 1 && indicator !== "dot"
+    const nestLabel = payloadList.length === 1 && indicator !== "dot"
 
     return (
       <div
@@ -183,7 +184,7 @@ const ChartTooltipContent = React.forwardRef<
       >
         {!nestLabel ? tooltipLabel : null}
         <div className="grid gap-1.5">
-          {payload
+          {payloadList
             .filter((item) => item.type !== "none")
             .map((item, index) => {
               const key = `${nameKey || item.name || item.dataKey || "value"}`
@@ -271,8 +272,9 @@ const ChartLegendContent = React.forwardRef<
     ref
   ) => {
     const { config } = useChart()
+    const payloadList = Array.isArray(payload) ? payload : []
 
-    if (!payload?.length) {
+    if (payloadList.length === 0) {
       return null
     }
 
@@ -285,7 +287,7 @@ const ChartLegendContent = React.forwardRef<
           className
         )}
       >
-        {payload
+        {payloadList
           .filter((item) => item.type !== "none")
           .map((item) => {
             const key = `${nameKey || item.dataKey || "value"}`
