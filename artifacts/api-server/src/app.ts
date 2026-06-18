@@ -33,6 +33,14 @@ app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : undefined));
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
+app.get("/", (_req, res) => {
+  res.json({
+    name: "Webedit API",
+    status: "ok",
+    health: "/api/healthz",
+  });
+});
+
 app.use("/api", router);
 
 export default app;

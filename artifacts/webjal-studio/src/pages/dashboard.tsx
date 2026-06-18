@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from "recharts";
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = useGetDashboardStats();
+  const { data: stats, isLoading, isError } = useGetDashboardStats();
 
   if (isLoading) {
     return (
@@ -28,7 +28,27 @@ export default function Dashboard() {
     );
   }
 
-  if (!stats) return null;
+  if (isError || !stats) {
+    return (
+      <div className="flex-1 bg-gray-50/50 p-8">
+        <Card className="max-w-xl border-red-200 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg text-red-700">Backend connection failed</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-muted-foreground">
+            <p>The frontend loaded, but it could not reach the API server.</p>
+            <p>
+              In Cloudflare Pages, set <code className="font-mono">VITE_API_BASE_URL</code> to your Render backend URL,
+              then redeploy the frontend.
+            </p>
+            <p>
+              In Render, set <code className="font-mono">CORS_ORIGIN</code> to this Cloudflare Pages URL.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 space-y-8 flex-1 overflow-auto bg-gray-50/50 dark:bg-background">
