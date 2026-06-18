@@ -46,6 +46,10 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 export default function TemplateEditor() {
   const { id } = useParams<{ id?: string }>();
   const [, setLocation] = useLocation();
@@ -104,7 +108,13 @@ export default function TemplateEditor() {
         toast({ title: "Template created successfully" });
         setLocation("/templates");
       },
-      onError: () => toast({ title: "Failed to create template", variant: "destructive" }),
+      onError: (error) => {
+        toast({
+          title: "Failed to create template",
+          description: errorMessage(error, "Please check the template fields and try again."),
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -116,7 +126,13 @@ export default function TemplateEditor() {
         toast({ title: "Template updated successfully" });
         setLocation("/templates");
       },
-      onError: () => toast({ title: "Failed to update template", variant: "destructive" }),
+      onError: (error) => {
+        toast({
+          title: "Failed to update template",
+          description: errorMessage(error, "Please check the template fields and try again."),
+          variant: "destructive",
+        });
+      },
     },
   });
 

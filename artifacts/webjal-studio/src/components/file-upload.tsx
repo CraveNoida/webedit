@@ -21,7 +21,7 @@ async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"
     const data = await response.json();
     if (!data.url) throw new Error("No URL returned");
     toast({ title: "Image uploaded successfully" });
-    return data.url as string;
+    return apiUrl(data.url as string);
   } catch {
     toast({ title: "Upload failed", variant: "destructive" });
     return null;

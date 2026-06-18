@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -42,5 +42,23 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api", router);
+
+const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  const status = typeof err?.status === "number" ? err.status : 500;
+  req.log?.error({ err }, "Unhandled API error");
+
+  if (status === 413 || err?.type === "entity.too.large") {
+    res.status(413).json({
+      error: "Template is too large to save. Remove large files from the folder, then import again.",
+    });
+    return;
+  }
+
+  res.status(status).json({
+    error: status >= 500 ? "Internal server error" : err?.message ?? "Request failed",
+  });
+};
+
+app.use(errorHandler);
 
 export default app;

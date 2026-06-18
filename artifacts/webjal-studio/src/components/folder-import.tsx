@@ -53,7 +53,8 @@ async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"
   try {
     const r = await fetch(apiUrl("/api/uploads"), { method: "POST", body: fd });
     if (!r.ok) throw new Error();
-    return ((await r.json()) as { url: string }).url;
+    const data = (await r.json()) as { url: string };
+    return apiUrl(data.url);
   } catch {
     toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
     return null;

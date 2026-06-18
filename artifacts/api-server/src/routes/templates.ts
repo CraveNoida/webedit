@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, templatesTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import { injectPlaceholders } from "../utils/inject-placeholders";
+import { logger } from "../lib/logger";
 import {
   ListTemplatesQueryParams,
   CreateTemplateBody,
@@ -12,6 +13,10 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+
+function cleanText(value: string | undefined): string | undefined {
+  return value?.replace(/\u0000/g, "");
+}
 
 router.get("/", async (req, res): Promise<void> => {
   const query = ListTemplatesQueryParams.safeParse(req.query);
@@ -36,25 +41,31 @@ router.post("/", async (req, res): Promise<void> => {
     return;
   }
 
-  // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately
-  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(body.data.htmlContent);
-  const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
+  try {
+    // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately.
+    const htmlContent = cleanText(body.data.htmlContent) ?? "";
+    const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
+    const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
 
-  const [template] = await db
-    .insert(templatesTable)
-    .values({
-      name: body.data.name,
-      category: body.data.category,
-      description: body.data.description ?? null,
-      htmlContent: injectedHtml,
-      cssContent: body.data.cssContent ?? null,
-      jsContent: body.data.jsContent ?? null,
-      thumbnailUrl: body.data.thumbnailUrl ?? null,
-      placeholders: mergedPh,
-    })
-    .returning();
+    const [template] = await db
+      .insert(templatesTable)
+      .values({
+        name: body.data.name,
+        category: body.data.category,
+        description: cleanText(body.data.description) ?? null,
+        htmlContent: injectedHtml,
+        cssContent: cleanText(body.data.cssContent) ?? null,
+        jsContent: cleanText(body.data.jsContent) ?? null,
+        thumbnailUrl: body.data.thumbnailUrl ?? null,
+        placeholders: mergedPh,
+      })
+      .returning();
 
-  res.status(201).json(template);
+    res.status(201).json(template);
+  } catch (err) {
+    logger.error({ err }, "Failed to create template");
+    res.status(500).json({ error: "Failed to create template. Check the server logs for details." });
+  }
 });
 
 router.get("/:id", async (req, res): Promise<void> => {
