@@ -14,6 +14,7 @@ const result = spawnSync(
       PORT: process.env.PORT || "8080",
       BASE_PATH: process.env.BASE_PATH || "/",
       API_PROXY_TARGET: process.env.API_PROXY_TARGET || "",
+      VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || "",
     },
   },
 );

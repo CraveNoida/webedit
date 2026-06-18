@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
 import { FileUpload } from "@/components/file-upload";
 import { FolderImport, type FolderImportResult } from "@/components/folder-import";
+import { apiUrl } from "@/lib/api-url";
 
 const COMMON_PLACEHOLDERS = [
   "{{businessName}}", "{{tagline}}", "{{about}}", "{{phone}}", "{{whatsapp}}",
@@ -152,7 +153,7 @@ export default function TemplateEditor() {
     if (!id) return;
     setIsInjecting(true);
     try {
-      const res = await fetch(`/api/templates/${id}/inject`, { method: "POST" });
+      const res = await fetch(apiUrl(`/api/templates/${id}/inject`), { method: "POST" });
       if (!res.ok) throw new Error("Injection failed");
       const { template: updated, detected } = await res.json();
       // Refresh form with injected HTML

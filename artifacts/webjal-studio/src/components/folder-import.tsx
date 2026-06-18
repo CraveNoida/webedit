@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api-url";
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp", ".avif"]);
 const CSS_EXTS = new Set([".css"]);
@@ -50,7 +51,7 @@ async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"
   const fd = new FormData();
   fd.append("file", file);
   try {
-    const r = await fetch("/api/uploads", { method: "POST", body: fd });
+    const r = await fetch(apiUrl("/api/uploads"), { method: "POST", body: fd });
     if (!r.ok) throw new Error();
     return ((await r.json()) as { url: string }).url;
   } catch {

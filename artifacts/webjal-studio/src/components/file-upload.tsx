@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UploadCloud, Loader2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api-url";
 
 interface FileUploadProps {
   value: string;
@@ -15,7 +16,7 @@ async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"
   const formData = new FormData();
   formData.append("file", file);
   try {
-    const response = await fetch("/api/uploads", { method: "POST", body: formData });
+    const response = await fetch(apiUrl("/api/uploads"), { method: "POST", body: formData });
     if (!response.ok) throw new Error("Upload failed");
     const data = await response.json();
     if (!data.url) throw new Error("No URL returned");

@@ -30,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
 import { FileUpload, GalleryUpload } from "@/components/file-upload";
 import { EDITOR_SCRIPT } from "@/lib/editor-script";
+import { apiUrl } from "@/lib/api-url";
 
 const formSchema = z.object({
   businessName: z.string().min(1),
@@ -147,7 +148,7 @@ export default function ProjectWorkspace() {
         editedHtmlRef.current = html;
         setEditSaveStatus("saving");
         // Save to backend
-        fetch(`/api/projects/${id}/html`, {
+        fetch(apiUrl(`/api/projects/${id}/html`), {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ html }),
@@ -260,7 +261,7 @@ export default function ProjectWorkspace() {
 
   async function handleDownloadZip() {
     try {
-      const response = await fetch(`/api/projects/${id}/download-zip`);
+      const response = await fetch(apiUrl(`/api/projects/${id}/download-zip`));
       if (!response.ok) {
         const err = await response.json();
         toast({ title: err.error ?? "Download failed", variant: "destructive" });
