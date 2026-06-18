@@ -122,8 +122,8 @@ export default function ProjectWorkspace() {
         logoUrl: project.logoUrl ?? "",
         heroImageUrl: project.heroImageUrl ?? "",
       });
-      setServices(project.services ?? []);
-      setGalleryImages(project.galleryImages ?? []);
+      setServices(Array.isArray(project.services) ? project.services : []);
+      setGalleryImages(Array.isArray(project.galleryImages) ? project.galleryImages : []);
     }
   }, [project]);
 

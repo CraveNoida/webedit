@@ -91,7 +91,7 @@ export default function TemplateEditor() {
         jsContent: template.jsContent ?? "",
         thumbnailUrl: template.thumbnailUrl ?? "",
       });
-      setPlaceholders(template.placeholders ?? []);
+      setPlaceholders(Array.isArray(template.placeholders) ? template.placeholders : []);
       // Warn if template references external local CSS files
       setHasExternalCss(/<link[^>]+href="(?!https?:\/\/)(?!\/\/)[^"]+\.css"/.test(template.htmlContent));
     }
@@ -158,7 +158,7 @@ export default function TemplateEditor() {
       const { template: updated, detected } = await res.json();
       // Refresh form with injected HTML
       form.setValue("htmlContent", updated.htmlContent);
-      setPlaceholders(updated.placeholders ?? []);
+      setPlaceholders(Array.isArray(updated.placeholders) ? updated.placeholders : []);
       setDetectedFields(detected);
       setHasExternalCss(/<link[^>]+href="(?!https?:\/\/)(?!\/\/)[^"]+\.css"/.test(updated.htmlContent));
       queryClient.invalidateQueries({ queryKey: getGetTemplateQueryKey(Number(id)) });

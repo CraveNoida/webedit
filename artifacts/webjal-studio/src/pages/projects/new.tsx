@@ -49,6 +49,7 @@ export default function ProjectNew() {
   const { toast } = useToast();
 
   const { data: templates, isLoading: templatesLoading } = useListTemplates();
+  const templateList = Array.isArray(templates) ? templates : [];
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -126,7 +127,7 @@ export default function ProjectNew() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-44" />)}
             </div>
-          ) : !templates || templates.length === 0 ? (
+          ) : templateList.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <Code2 className="h-8 w-8 text-muted-foreground mb-3" />
@@ -136,7 +137,7 @@ export default function ProjectNew() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {templates.map((template) => (
+              {templateList.map((template) => (
                 <Card
                   key={template.id}
                   data-testid={`card-select-template-${template.id}`}

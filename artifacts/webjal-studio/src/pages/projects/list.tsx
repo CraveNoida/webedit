@@ -23,6 +23,7 @@ export default function ProjectsList() {
 
   const params = category && category !== "all" ? { category, search: search || undefined } : { search: search || undefined };
   const { data: projects, isLoading } = useListProjects(params);
+  const projectList = Array.isArray(projects) ? projects : [];
 
   const deleteMutation = useDeleteProject({
     mutation: {
@@ -86,7 +87,7 @@ export default function ProjectsList() {
           </SelectContent>
         </Select>
         {projects && (
-          <span className="text-sm text-muted-foreground">{projects.length} project{projects.length !== 1 ? "s" : ""}</span>
+          <span className="text-sm text-muted-foreground">{projectList.length} project{projectList.length !== 1 ? "s" : ""}</span>
         )}
       </div>
 
@@ -96,7 +97,7 @@ export default function ProjectsList() {
             <Skeleton key={i} className="h-44" />
           ))}
         </div>
-      ) : !projects || projects.length === 0 ? (
+      ) : projectList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
             <Briefcase className="h-8 w-8 text-muted-foreground" />
@@ -111,7 +112,7 @@ export default function ProjectsList() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+          {projectList.map((project) => (
             <Card key={project.id} data-testid={`card-project-${project.id}`} className="group border shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">

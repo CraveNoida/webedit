@@ -20,6 +20,7 @@ export default function TemplatesList() {
 
   const params = category && category !== "all" ? { category } : undefined;
   const { data: templates, isLoading } = useListTemplates(params);
+  const templateList = Array.isArray(templates) ? templates : [];
   const deleteMutation = useDeleteTemplate({
     mutation: {
       onSuccess: () => {
@@ -57,7 +58,7 @@ export default function TemplatesList() {
           </SelectContent>
         </Select>
         {templates && (
-          <span className="text-sm text-muted-foreground">{templates.length} template{templates.length !== 1 ? "s" : ""}</span>
+          <span className="text-sm text-muted-foreground">{templateList.length} template{templateList.length !== 1 ? "s" : ""}</span>
         )}
       </div>
 
@@ -67,7 +68,7 @@ export default function TemplatesList() {
             <Skeleton key={i} className="h-48" />
           ))}
         </div>
-      ) : !templates || templates.length === 0 ? (
+      ) : templateList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
             <FileCode className="h-8 w-8 text-muted-foreground" />
@@ -82,66 +83,70 @@ export default function TemplatesList() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((template) => (
-            <Card key={template.id} data-testid={`card-template-${template.id}`} className="group border shadow-sm hover:shadow-md transition-shadow">
-              {template.thumbnailUrl ? (
-                <div className="h-36 overflow-hidden rounded-t-lg bg-muted">
-                  <img src={template.thumbnailUrl} alt={template.name} className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="h-36 rounded-t-lg bg-gradient-to-br from-primary/10 to-purple-600/10 flex items-center justify-center">
-                  <Code2 className="h-10 w-10 text-primary/40" />
-                </div>
-              )}
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-base leading-tight">{template.name}</CardTitle>
-                  <Badge variant="secondary" className="shrink-0 text-xs">{template.category}</Badge>
-                </div>
-                {template.description && (
-                  <CardDescription className="text-xs line-clamp-2">{template.description}</CardDescription>
+          {templateList.map((template) => {
+            const placeholders = Array.isArray(template.placeholders) ? template.placeholders : [];
+
+            return (
+              <Card key={template.id} data-testid={`card-template-${template.id}`} className="group border shadow-sm hover:shadow-md transition-shadow">
+                {template.thumbnailUrl ? (
+                  <div className="h-36 overflow-hidden rounded-t-lg bg-muted">
+                    <img src={template.thumbnailUrl} alt={template.name} className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="h-36 rounded-t-lg bg-gradient-to-br from-primary/10 to-purple-600/10 flex items-center justify-center">
+                    <Code2 className="h-10 w-10 text-primary/40" />
+                  </div>
                 )}
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    {template.placeholders.length} placeholder{template.placeholders.length !== 1 ? "s" : ""} · {format(new Date(template.createdAt), "MMM d, yyyy")}
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="text-base leading-tight">{template.name}</CardTitle>
+                    <Badge variant="secondary" className="shrink-0 text-xs">{template.category}</Badge>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Link href={`/templates/${template.id}/edit`}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-edit-template-${template.id}`}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                    </Link>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" data-testid={`button-delete-template-${template.id}`}>
-                          <Trash2 className="h-3.5 w-3.5" />
+                  {template.description && (
+                    <CardDescription className="text-xs line-clamp-2">{template.description}</CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">
+                      {placeholders.length} placeholder{placeholders.length !== 1 ? "s" : ""} - {format(new Date(template.createdAt), "MMM d, yyyy")}
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link href={`/templates/${template.id}/edit`}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" data-testid={`button-edit-template-${template.id}`}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete template?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete "{template.name}". Projects using this template won't be affected.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => deleteMutation.mutate({ id: template.id })}
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                      </Link>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" data-testid={`button-delete-template-${template.id}`}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete template?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete "{template.name}". Projects using this template won't be affected.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => deleteMutation.mutate({ id: template.id })}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
