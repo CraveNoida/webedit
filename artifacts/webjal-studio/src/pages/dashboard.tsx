@@ -50,6 +50,11 @@ export default function Dashboard() {
     );
   }
 
+  const recentProjects = Array.isArray(stats.recentProjects) ? stats.recentProjects : [];
+  const projectsByCategory = Array.isArray(stats.projectsByCategory) ? stats.projectsByCategory : [];
+  const totalProjects = typeof stats.totalProjects === "number" ? stats.totalProjects : 0;
+  const totalTemplates = typeof stats.totalTemplates === "number" ? stats.totalTemplates : 0;
+
   return (
     <div className="p-8 space-y-8 flex-1 overflow-auto bg-gray-50/50 dark:bg-background">
       <div className="flex items-center justify-between">
@@ -73,7 +78,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.totalProjects}</div>
+            <div className="text-3xl font-bold">{totalProjects}</div>
           </CardContent>
         </Card>
         
@@ -85,7 +90,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.totalTemplates}</div>
+            <div className="text-3xl font-bold">{totalTemplates}</div>
           </CardContent>
         </Card>
       </div>
@@ -103,7 +108,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-1">
-            {stats.recentProjects.length === 0 ? (
+            {recentProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
                   <Briefcase className="h-6 w-6 text-muted-foreground" />
@@ -116,7 +121,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="divide-y">
-                {stats.recentProjects.map((project) => (
+                {recentProjects.map((project) => (
                   <div key={project.id} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-muted/50 transition-colors">
                     <div className="space-y-1">
                       <Link href={`/projects/${project.id}`}>
@@ -145,14 +150,14 @@ export default function Dashboard() {
             <CardTitle className="text-lg">Projects by Category</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
-            {stats.projectsByCategory.length === 0 ? (
+            {projectsByCategory.length === 0 ? (
               <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
                 No data available
               </div>
             ) : (
               <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.projectsByCategory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={projectsByCategory} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <XAxis dataKey="category" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis fontSize={12} tickLine={false} axisLine={false} allowDecimals={false} />
                     <RechartsTooltip 
@@ -160,7 +165,7 @@ export default function Dashboard() {
                       contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: 'var(--shadow-sm)' }}
                     />
                     <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                      {stats.projectsByCategory.map((entry, index) => (
+                      {projectsByCategory.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={`var(--color-chart-${(index % 5) + 1})`} />
                       ))}
                     </Bar>
