@@ -50,6 +50,10 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
+function shortError(message: string): string {
+  return message.length > 140 ? `${message.slice(0, 137)}...` : message;
+}
+
 export default function TemplateEditor() {
   const { id } = useParams<{ id?: string }>();
   const [, setLocation] = useLocation();
@@ -114,7 +118,7 @@ export default function TemplateEditor() {
         const message = errorMessage(error, "Please check the template fields and try again.");
         setSubmitError(message);
         toast({
-          title: "Failed to create template",
+          title: `Failed: ${shortError(message)}`,
           description: message,
           variant: "destructive",
         });
@@ -135,7 +139,7 @@ export default function TemplateEditor() {
         const message = errorMessage(error, "Please check the template fields and try again.");
         setSubmitError(message);
         toast({
-          title: "Failed to update template",
+          title: `Failed: ${shortError(message)}`,
           description: message,
           variant: "destructive",
         });
@@ -519,6 +523,14 @@ export default function TemplateEditor() {
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEditing ? "Save Changes" : "Create Template"}
               </Button>
+              {submitError && (
+                <Alert className="border-red-300 bg-red-50 dark:bg-red-900/20">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <AlertDescription className="break-words text-red-800 dark:text-red-200 text-xs">
+                    {submitError}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </div>
         </form>
