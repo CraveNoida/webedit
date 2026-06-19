@@ -70,8 +70,9 @@ export default function ProjectWorkspace() {
   const [services, setServices] = useState<string[]>([]);
   const [newService, setNewService] = useState("");
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"preview" | "details">("preview");
   const [editSaveStatus, setEditSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const editedHtmlRef = useRef<string | null>(null);
   const isEditModeRef = useRef(false);
@@ -129,10 +130,7 @@ export default function ProjectWorkspace() {
 
   useEffect(() => {
     if (project?.generatedHtml && !isEditModeRef.current) {
-      const blob = new Blob([project.generatedHtml], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      setPreviewBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
-      return () => URL.revokeObjectURL(url);
+      setPreviewHtml(project.generatedHtml);
     }
     return undefined;
   }, [project?.generatedHtml]);
@@ -169,18 +167,15 @@ export default function ProjectWorkspace() {
     return () => window.removeEventListener("message", handleMessage);
   }, [id]);
 
-  function buildEditBlob(html: string): string {
-    const withEditor = html.replace("</body>", `${EDITOR_SCRIPT}\n</body>`);
-    const blob = new Blob([withEditor], { type: "text/html" });
-    return URL.createObjectURL(blob);
+  function buildEditHtml(html: string): string {
+    return html.replace("</body>", `${EDITOR_SCRIPT}\n</body>`);
   }
 
   function enterEditMode() {
     const html = editedHtmlRef.current ?? project?.generatedHtml;
     if (!html) { toast({ title: "Generate the website first before editing." }); return; }
     setIsEditMode(true);
-    const url = buildEditBlob(html);
-    setPreviewBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+    setPreviewHtml(buildEditHtml(html));
   }
 
   function exitEditMode() {
@@ -188,9 +183,7 @@ export default function ProjectWorkspace() {
     setEditSaveStatus("idle");
     const html = editedHtmlRef.current ?? project?.generatedHtml;
     if (!html) return;
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    setPreviewBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+    setPreviewHtml(html);
   }
 
   const updateMutation = useUpdateProject({
@@ -212,9 +205,7 @@ export default function ProjectWorkspace() {
         setEditSaveStatus("idle");
         queryClient.setQueryData(getGetProjectQueryKey(Number(id)), data);
         if (data.generatedHtml) {
-          const blob = new Blob([data.generatedHtml], { type: "text/html" });
-          const url = URL.createObjectURL(blob);
-          setPreviewBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+          setPreviewHtml(data.generatedHtml);
         }
         toast({ title: "Website generated successfully" });
       },
@@ -302,8 +293,8 @@ export default function ProjectWorkspace() {
   }
 
   return (
-    <div className="flex h-[100svh] flex-col overflow-auto md:h-screen md:overflow-hidden">
-      <div className="flex shrink-0 flex-col gap-3 border-b bg-background px-4 py-3 pl-16 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:pl-6">
+    <div className="flex h-[100svh] flex-col overflow-hidden md:h-screen">
+      <div className="flex shrink-0 flex-col gap-3 border-b bg-background px-4 py-3 pl-16 sm:px-6 md:flex-row md:items-center md:justify-between md:pl-6">
         <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/projects")}>
             <ArrowLeft className="h-4 w-4" />
@@ -319,8 +310,8 @@ export default function ProjectWorkspace() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center overflow-hidden rounded-md border">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+          <div className="flex shrink-0 items-center overflow-hidden rounded-md border">
             {(["desktop", "tablet", "mobile"] as ViewMode[]).map((mode) => {
               const Icon = mode === "desktop" ? Monitor : mode === "tablet" ? Tablet : Smartphone;
               return (
@@ -346,7 +337,7 @@ export default function ProjectWorkspace() {
             className={`gap-1.5 ${isEditMode ? "bg-purple-600 hover:bg-purple-700 border-purple-600" : ""}`}
           >
             {isEditMode ? <Eye className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
-            {isEditMode ? "Preview" : "Edit"}
+            <span className="hidden sm:inline">{isEditMode ? "Preview" : "Edit"}</span>
           </Button>
 
           {isEditMode && editSaveStatus !== "idle" && (
@@ -364,7 +355,7 @@ export default function ProjectWorkspace() {
             className="gap-1.5"
           >
             {generateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Regenerate
+            <span className="hidden sm:inline">Regenerate</span>
           </Button>
 
           <Button
@@ -375,7 +366,7 @@ export default function ProjectWorkspace() {
             className="gap-1.5 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90"
           >
             <Download className="h-3.5 w-3.5" />
-            Download ZIP
+            <span className="hidden sm:inline">Download ZIP</span>
           </Button>
 
           <Button variant="ghost" size="icon" onClick={() => duplicateMutation.mutate({ id: Number(id) })} data-testid="button-duplicate">
@@ -405,8 +396,29 @@ export default function ProjectWorkspace() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-visible md:flex-row md:overflow-hidden">
-        <div className="order-2 flex max-h-[48svh] w-full shrink-0 flex-col overflow-hidden border-t md:order-1 md:max-h-none md:w-80 md:border-r md:border-t-0 lg:w-96">
+      <div className="flex shrink-0 gap-2 border-b bg-background px-4 py-2 md:hidden">
+        <Button
+          type="button"
+          variant={mobilePanel === "preview" ? "default" : "outline"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setMobilePanel("preview")}
+        >
+          Preview
+        </Button>
+        <Button
+          type="button"
+          variant={mobilePanel === "details" ? "default" : "outline"}
+          size="sm"
+          className="flex-1"
+          onClick={() => setMobilePanel("details")}
+        >
+          Details
+        </Button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row md:overflow-hidden">
+        <div className={`${mobilePanel === "details" ? "flex" : "hidden"} min-h-0 w-full shrink-0 flex-col overflow-hidden md:flex md:w-80 md:border-r lg:w-96`}>
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="text-sm font-medium">Client Details</span>
             <Button size="sm" variant="outline" onClick={handleSave} disabled={updateMutation.isPending} data-testid="button-save">
@@ -597,17 +609,17 @@ export default function ProjectWorkspace() {
           </ScrollArea>
         </div>
 
-        <div className="order-1 flex min-h-[58svh] flex-1 flex-col overflow-hidden bg-muted/30 md:order-2 md:min-h-0">
+        <div className={`${mobilePanel === "preview" ? "flex" : "hidden"} min-h-0 flex-1 flex-col overflow-hidden bg-muted/30 md:flex`}>
           <div className="flex flex-1 items-start justify-center overflow-auto p-3 sm:p-4">
             <div
-              style={{ width: VIEW_WIDTHS[viewMode], maxWidth: "100%", minHeight: "100%" }}
+              style={{ width: VIEW_WIDTHS[viewMode], maxWidth: "100%", height: "100%" }}
               className="min-w-0 overflow-hidden rounded-md bg-white shadow-lg transition-all duration-300"
             >
-              {previewBlobUrl ? (
+              {previewHtml ? (
                 <iframe
                   ref={iframeRef}
-                  src={previewBlobUrl}
-                  className="h-[58svh] w-full border-0 md:h-[calc(100vh_-_120px)]"
+                  srcDoc={previewHtml}
+                  className="h-full min-h-0 w-full border-0"
                   title="Website Preview"
                   data-testid="iframe-preview"
                 />

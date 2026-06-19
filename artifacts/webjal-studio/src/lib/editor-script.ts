@@ -21,11 +21,14 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     top: var(--wj-editor-bar-height) !important;
   }
   @media (max-width: 520px) {
-    :root { --wj-editor-bar-height: 88px; }
-    #wj-bar { align-items: flex-start; gap: 6px; padding: 8px; }
+    :root { --wj-editor-bar-height: 52px; }
+    #wj-bar { align-items: center; gap: 6px; padding: 8px; }
+    #wj-bar .wb { padding: 4px 8px; font-size: 11px; }
     #wj-bar .wi { width: 100%; }
     #wj-bar .sp { display: none; }
     #wj-bar .ws { display: none; }
+    #wj-bar .sl { display: none; }
+    #wj-bar span[style*="opacity:0.5"] { display: none !important; }
   }
 </style>
 <script id="wj-editor-script">(function(){
