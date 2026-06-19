@@ -1,21 +1,44 @@
 export const EDITOR_SCRIPT = `<style id="wj-editor-style">
+  :root { --wj-editor-bar-height: 44px; }
   [data-wj-hover]:not([data-wj-selected]) { outline: 2px dashed rgba(99,102,241,0.65) !important; outline-offset: 3px !important; cursor: pointer !important; }
   [data-wj-selected] { outline: 2px solid #6366f1 !important; outline-offset: 3px !important; }
   [contenteditable="true"] { min-width: 20px; min-height: 1em; }
-  #wj-bar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: linear-gradient(90deg,#312e81,#4c1d95); color: #fff; display: flex; align-items: center; padding: 0 16px; gap: 10px; z-index: 2147483647; font-family: system-ui,-apple-system,sans-serif; font-size: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.35); user-select: none; box-sizing: border-box; }
+  #wj-bar { position: fixed; top: 0; left: 0; right: 0; min-height: var(--wj-editor-bar-height); background: linear-gradient(90deg,#312e81,#4c1d95); color: #fff; display: flex; align-items: center; padding: 8px 16px; gap: 10px; z-index: 2147483647; font-family: system-ui,-apple-system,sans-serif; font-size: 12px; box-shadow: 0 2px 16px rgba(0,0,0,0.35); user-select: none; box-sizing: border-box; flex-wrap: wrap; }
   #wj-bar .wb { background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 4px 12px; border-radius: 5px; cursor: pointer; font-size: 12px; font-family: inherit; flex-shrink: 0; }
   #wj-bar .wb:hover { background: rgba(255,255,255,0.26); }
   #wj-bar .ws { width:1px; height:20px; background: rgba(255,255,255,0.2); flex-shrink:0; }
   #wj-bar .wi { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 12px; width: 280px; outline: none; font-family: inherit; flex-shrink: 1; min-width: 80px; }
   #wj-bar .wi::placeholder { color: rgba(255,255,255,0.4); }
   #wj-bar .sp { flex: 1; min-width: 8px; }
-  body { margin-top: 44px !important; }
+  body { padding-top: var(--wj-editor-bar-height) !important; }
+  body > header,
+  body > nav,
+  body > [class*="sticky"][class*="top-0"],
+  body > [class*="fixed"][class*="top-0"],
+  body > [style*="position: sticky"][style*="top: 0"],
+  body > [style*="position:fixed"][style*="top:0"],
+  body > [style*="position: fixed"][style*="top: 0"] {
+    top: var(--wj-editor-bar-height) !important;
+  }
+  @media (max-width: 520px) {
+    :root { --wj-editor-bar-height: 88px; }
+    #wj-bar { align-items: flex-start; gap: 6px; padding: 8px; }
+    #wj-bar .wi { width: 100%; }
+    #wj-bar .sp { display: none; }
+    #wj-bar .ws { display: none; }
+  }
 </style>
 <script id="wj-editor-script">(function(){
   'use strict';
   var bar=document.createElement('div'); bar.id='wj-bar';
   document.body.prepend(bar);
   var sel=null, saved=null, stimer=null, slabel=null;
+
+  function syncBarHeight(){
+    requestAnimationFrame(function(){
+      document.documentElement.style.setProperty('--wj-editor-bar-height', bar.offsetHeight+'px');
+    });
+  }
 
   function exit(){ commit(); window.parent.postMessage({type:'wj-exit-edit'},'*'); }
 
@@ -29,6 +52,7 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Edit Mode</span><span style="opacity:0.5;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Click any text or image to edit</span><div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
     slabel=bar.querySelector('.sl');
     bar.querySelector('#wb-exit').onclick=exit;
+    syncBarHeight();
   }
 
   function deleteSelected(){
@@ -49,6 +73,7 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     bar.querySelector('#wb-cancel').onclick=function(){ if(sel&&saved!==null) sel.innerHTML=saved; commit(); idle(); };
     bar.querySelector('#wb-del').onclick=function(){ if(confirm('Delete this element?')) deleteSelected(); };
     bar.querySelector('#wb-exit').onclick=function(){ if(sel&&saved!==null) sel.innerHTML=saved; commit(); exit(); };
+    syncBarHeight();
   }
 
   function imgBar(el){
@@ -60,6 +85,7 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     bar.querySelector('#wb-cancel').onclick=function(){ commit(); idle(); };
     bar.querySelector('#wb-del').onclick=function(){ if(confirm('Delete this image?')) deleteSelected(); };
     bar.querySelector('#wb-exit').onclick=function(){ commit(); exit(); };
+    syncBarHeight();
   }
 
   function serialize(){
@@ -80,6 +106,7 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
   function schedule(){ clearTimeout(stimer); stimer=setTimeout(send,900); }
 
   idle();
+  window.addEventListener('resize', syncBarHeight);
 
   var SKIP=new Set(['HTML','BODY','HEAD','SCRIPT','STYLE','META','LINK','NOSCRIPT']);
   function skip(e){

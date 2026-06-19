@@ -302,14 +302,14 @@ export default function ProjectWorkspace() {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-3 border-b bg-background shrink-0 gap-4">
-        <div className="flex items-center gap-3">
+    <div className="flex h-[100svh] flex-col overflow-auto md:h-screen md:overflow-hidden">
+      <div className="flex shrink-0 flex-col gap-3 border-b bg-background px-4 py-3 pl-16 sm:flex-row sm:items-center sm:justify-between sm:px-6 md:pl-6">
+        <div className="flex min-w-0 items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => setLocation("/projects")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <div className="font-semibold leading-tight">{project.businessName}</div>
+          <div className="min-w-0">
+            <div className="truncate font-semibold leading-tight">{project.businessName}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Badge variant="secondary" className="text-xs">{project.category}</Badge>
               <Badge variant={project.status === "generated" ? "default" : "outline"} className="text-xs">
@@ -319,8 +319,8 @@ export default function ProjectWorkspace() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center border rounded-md overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center overflow-hidden rounded-md border">
             {(["desktop", "tablet", "mobile"] as ViewMode[]).map((mode) => {
               const Icon = mode === "desktop" ? Monitor : mode === "tablet" ? Tablet : Smartphone;
               return (
@@ -405,8 +405,8 @@ export default function ProjectWorkspace() {
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="w-80 lg:w-96 shrink-0 border-r flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-visible md:flex-row md:overflow-hidden">
+        <div className="order-2 flex max-h-[48svh] w-full shrink-0 flex-col overflow-hidden border-t md:order-1 md:max-h-none md:w-80 md:border-r md:border-t-0 lg:w-96">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="text-sm font-medium">Client Details</span>
             <Button size="sm" variant="outline" onClick={handleSave} disabled={updateMutation.isPending} data-testid="button-save">
@@ -597,18 +597,17 @@ export default function ProjectWorkspace() {
           </ScrollArea>
         </div>
 
-        <div className="flex-1 flex flex-col bg-muted/30 overflow-hidden">
-          <div className="flex-1 flex items-start justify-center overflow-auto p-4">
+        <div className="order-1 flex min-h-[58svh] flex-1 flex-col overflow-hidden bg-muted/30 md:order-2 md:min-h-0">
+          <div className="flex flex-1 items-start justify-center overflow-auto p-3 sm:p-4">
             <div
               style={{ width: VIEW_WIDTHS[viewMode], maxWidth: "100%", minHeight: "100%" }}
-              className="transition-all duration-300 bg-white rounded-md shadow-lg overflow-hidden"
+              className="min-w-0 overflow-hidden rounded-md bg-white shadow-lg transition-all duration-300"
             >
               {previewBlobUrl ? (
                 <iframe
                   ref={iframeRef}
                   src={previewBlobUrl}
-                  className="w-full border-0"
-                  style={{ height: "calc(100vh - 120px)" }}
+                  className="h-[58svh] w-full border-0 md:h-[calc(100vh_-_120px)]"
                   title="Website Preview"
                   data-testid="iframe-preview"
                 />
