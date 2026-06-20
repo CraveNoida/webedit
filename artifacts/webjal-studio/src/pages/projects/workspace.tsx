@@ -272,18 +272,22 @@ export default function ProjectWorkspace() {
     }
   }
 
+  function openHtmlInNewTab(html: string) {
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   function handleOpenPreview() {
     const editedHtml = editedHtmlRef.current;
     if (editedHtml) {
-      const blob = new Blob([editedHtml], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      openHtmlInNewTab(editedHtml);
       return;
     }
 
     if (project?.generatedHtml) {
-      window.open(apiUrl(`/api/projects/${id}/preview`), "_blank", "noopener,noreferrer");
+      openHtmlInNewTab(project.generatedHtml);
       return;
     }
 
