@@ -11,15 +11,6 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
   #wj-bar .wi::placeholder { color: rgba(255,255,255,0.4); }
   #wj-bar .sp { flex: 1; min-width: 8px; }
   body { padding-top: var(--wj-editor-bar-height) !important; }
-  body > header,
-  body > nav,
-  body > [class*="sticky"][class*="top-0"],
-  body > [class*="fixed"][class*="top-0"],
-  body > [style*="position: sticky"][style*="top: 0"],
-  body > [style*="position:fixed"][style*="top:0"],
-  body > [style*="position: fixed"][style*="top: 0"] {
-    top: var(--wj-editor-bar-height) !important;
-  }
   @media (max-width: 520px) {
     :root { --wj-editor-bar-height: 52px; }
     #wj-bar { align-items: center; gap: 6px; padding: 8px; }
@@ -40,6 +31,28 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
   function syncBarHeight(){
     requestAnimationFrame(function(){
       document.documentElement.style.setProperty('--wj-editor-bar-height', bar.offsetHeight+'px');
+      offsetTopBars();
+    });
+  }
+
+  function parsePx(v){
+    var n=parseFloat(v);
+    return isNaN(n)?0:n;
+  }
+
+  function offsetTopBars(){
+    var h=bar.offsetHeight||44;
+    document.querySelectorAll('header,nav,[class*="nav"],[class*="header"],[class*="sticky"],[class*="fixed"],[style*="position"]').forEach(function(el){
+      if(!el||el===bar||(el.closest&&el.closest('#wj-bar'))) return;
+      var cs=window.getComputedStyle(el);
+      if(cs.position!=='fixed'&&cs.position!=='sticky') return;
+      var rect=el.getBoundingClientRect();
+      var alreadyAdjusted=el.hasAttribute('data-wj-editor-offset');
+      var top=alreadyAdjusted?parsePx(el.getAttribute('data-wj-original-top')||'0'):parsePx(cs.top);
+      if(!alreadyAdjusted&&top>8&&rect.top>8) return;
+      if(!el.hasAttribute('data-wj-original-top')) el.setAttribute('data-wj-original-top', el.style.top||'');
+      el.setAttribute('data-wj-editor-offset','');
+      el.style.setProperty('top', (h+top)+'px', 'important');
     });
   }
 
@@ -95,6 +108,13 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
     var c=document.documentElement.cloneNode(true);
     ['wj-bar','wj-editor-style','wj-editor-script'].forEach(function(id){ var e=c.querySelector('#'+id); if(e) e.remove(); });
     var b=c.querySelector('body'); if(b) b.style.marginTop='';
+    c.querySelectorAll('[data-wj-editor-offset]').forEach(function(e){
+      var original=e.getAttribute('data-wj-original-top')||'';
+      if(original) e.style.top=original;
+      else e.style.removeProperty('top');
+      e.removeAttribute('data-wj-editor-offset');
+      e.removeAttribute('data-wj-original-top');
+    });
     c.querySelectorAll('[data-wj-hover],[data-wj-selected]').forEach(function(e){ e.removeAttribute('data-wj-hover'); e.removeAttribute('data-wj-selected'); });
     c.querySelectorAll('[contenteditable]').forEach(function(e){ e.removeAttribute('contenteditable'); });
     return '<!DOCTYPE html>\\n'+c.outerHTML;
