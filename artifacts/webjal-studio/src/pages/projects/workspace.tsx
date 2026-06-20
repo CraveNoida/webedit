@@ -24,7 +24,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, Monitor, Tablet, Smartphone, RefreshCw, Download, Copy, Trash2, Loader2, Plus, X, Pencil, Eye
+  ArrowLeft, Monitor, Tablet, Smartphone, RefreshCw, Download, Copy, Trash2, Loader2, Plus, X, Pencil, Eye, ExternalLink
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CATEGORIES } from "@/lib/constants";
@@ -272,6 +272,24 @@ export default function ProjectWorkspace() {
     }
   }
 
+  function handleOpenPreview() {
+    const editedHtml = editedHtmlRef.current;
+    if (editedHtml) {
+      const blob = new Blob([editedHtml], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      return;
+    }
+
+    if (project?.generatedHtml) {
+      window.open(apiUrl(`/api/projects/${id}/preview`), "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    toast({ title: "Generate the website first before opening it." });
+  }
+
   if (isLoading) {
     return (
       <div className="p-8 space-y-4">
@@ -356,6 +374,18 @@ export default function ProjectWorkspace() {
           >
             {generateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">Regenerate</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenPreview}
+            disabled={!project.generatedHtml && !editedHtmlRef.current}
+            data-testid="button-open-preview"
+            className="gap-1.5"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Open Site</span>
           </Button>
 
           <Button

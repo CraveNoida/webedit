@@ -116,7 +116,13 @@ function buildImageMap(relPath: string, url: string, map: Map<string, string>) {
     variants.add(`../${suffix}`);
   }
 
+  const withEncodedVariants = new Set<string>();
   variants.forEach((variant) => {
+    withEncodedVariants.add(variant);
+    withEncodedVariants.add(encodeURI(variant));
+  });
+
+  withEncodedVariants.forEach((variant) => {
     if (!map.has(variant)) map.set(variant, url);
   });
 }

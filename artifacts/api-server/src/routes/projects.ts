@@ -390,6 +390,32 @@ router.get("/:id", async (req, res): Promise<void> => {
   }
 });
 
+router.get("/:id/preview", async (req, res): Promise<void> => {
+  const params = GetProjectParams.safeParse({ id: Number(req.params.id) });
+  if (!params.success) {
+    res.status(400).send("Invalid project id");
+    return;
+  }
+
+  const [project] = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.id, params.data.id));
+
+  if (!project) {
+    res.status(404).send("Project not found");
+    return;
+  }
+
+  if (!project.generatedHtml) {
+    res.status(404).send("Project has not been generated yet.");
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(prepareDownloadHtml(project.generatedHtml));
+});
+
 router.put("/:id", async (req, res): Promise<void> => {
   const params = UpdateProjectParams.safeParse({ id: Number(req.params.id) });
   const body = UpdateProjectBody.safeParse(req.body);
