@@ -15,6 +15,8 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+const DEFAULT_HERO_IMAGE_URL =
+  "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1600&q=80";
 
 /**
  * Prepares generated HTML for offline use:
@@ -213,11 +215,36 @@ type ProjectData = {
 
 function getProjectValue(data: ProjectData, key: keyof ProjectData, fallback = ""): string {
   const value = data[key];
-  return typeof value === "string" ? value : fallback;
+  if (typeof value !== "string") return fallback;
+  return value.trim() || fallback;
+}
+
+function isLocalImageUrl(url: string): boolean {
+  const clean = url.trim();
+  if (!clean || clean.includes("{{")) return false;
+  if (/^(?:https?:)?\/\//i.test(clean)) return false;
+  if (/^(?:data|blob):/i.test(clean)) return false;
+  if (/^\/?api\/uploads\//i.test(clean)) return false;
+  return /\.(?:jpe?g|png|webp|gif|svg|ico|bmp|avif)(?:[?#].*)?$/i.test(clean);
+}
+
+function replaceUnresolvedLocalImages(html: string): string {
+  return html
+    .replace(
+      /\b(src|data-src|data-bg)=["']([^"']+)["']/gi,
+      (match, attr: string, url: string) =>
+        isLocalImageUrl(url) ? `${attr}="${DEFAULT_HERO_IMAGE_URL}"` : match,
+    )
+    .replace(
+      /url\((["']?)([^"')]+)\1\)/gi,
+      (match, quote: string, url: string) =>
+        isLocalImageUrl(url) ? `url(${quote}${DEFAULT_HERO_IMAGE_URL}${quote})` : match,
+    );
 }
 
 function generateHtml(template: { htmlContent: string; cssContent?: string | null; jsContent?: string | null }, data: ProjectData): string {
   let html = template.htmlContent;
+  const heroImageUrl = getProjectValue(data, "heroImageUrl", DEFAULT_HERO_IMAGE_URL);
 
   // Inject CSS and JS if present
   if (template.cssContent) {
@@ -242,8 +269,8 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
     "{{primaryColor}}": getProjectValue(data, "primaryColor", "#4f46e5"),
     "{{secondaryColor}}": getProjectValue(data, "secondaryColor", "#7c3aed"),
     "{{logoUrl}}": getProjectValue(data, "logoUrl"),
-    "{{heroImage}}": getProjectValue(data, "heroImageUrl"),
-    "{{heroImageUrl}}": getProjectValue(data, "heroImageUrl"),
+    "{{heroImage}}": heroImageUrl,
+    "{{heroImageUrl}}": heroImageUrl,
     "{{whatsappLink}}": `https://wa.me/${getProjectValue(data, "whatsapp").replace(/[^0-9]/g, "")}`,
     "{{phoneLink}}": `tel:${getProjectValue(data, "phone")}`,
     "{{emailLink}}": `mailto:${getProjectValue(data, "email")}`,
@@ -272,7 +299,7 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
     html = html.replaceAll(key, value);
   }
 
-  return html;
+  return replaceUnresolvedLocalImages(html);
 }
 
 async function prepareTemplateForProject(template: ProjectTemplate): Promise<ProjectTemplate> {

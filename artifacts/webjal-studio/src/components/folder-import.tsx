@@ -63,33 +63,13 @@ async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"
 
 // ── HTML merging ──────────────────────────────────────────────────────────────
 // Uses index.html (or first HTML) as the primary structure.
-// Extracts the <body> content of every additional HTML file and appends it
-// inside the primary's <body> so all pages become sections of one document.
+// Other HTML files are left out so multi-page template folders do not become
+// one repeating single-page preview.
 
 function mergeHtmlFiles(files: { name: string; content: string }[]): string {
   if (files.length === 0) return "";
-  if (files.length === 1) return files[0].content;
-
-  // Sort: index.html first
-  const sorted = [...files].sort((a, b) =>
-    a.name === "index.html" ? -1 : b.name === "index.html" ? 1 : 0
-  );
-
-  let primary = sorted[0].content;
-
-  for (let i = 1; i < sorted.length; i++) {
-    const { name, content } = sorted[i];
-    const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    const bodyContent = bodyMatch ? bodyMatch[1].trim() : content.trim();
-    const insertion = `\n\n<!-- ═══ ${name} ═══ -->\n${bodyContent}`;
-    if (/<\/body>/i.test(primary)) {
-      primary = primary.replace(/<\/body>/i, `${insertion}\n</body>`);
-    } else {
-      primary += insertion;
-    }
-  }
-
-  return primary;
+  const index = files.find((file) => file.name.toLowerCase() === "index.html");
+  return (index ?? files[0]).content;
 }
 
 // ── Reference replacement ─────────────────────────────────────────────────────
@@ -183,7 +163,15 @@ async function processFiles(
   }
   const mergedHtml = mergeHtmlFiles(htmlContents);
   const mergedHtmlFiles = htmlRecs.map((r) => r.name);
-  if (htmlRecs.length > 0) summary.push(`HTML: ${mergedHtmlFiles.join(" + ")}`);
+  if (htmlRecs.length > 0) {
+    const primaryName = htmlContents.find((file) => file.name.toLowerCase() === "index.html")?.name ?? htmlContents[0].name;
+    const ignoredCount = Math.max(0, htmlRecs.length - 1);
+    summary.push(
+      ignoredCount > 0
+        ? `HTML: ${primaryName} used, ${ignoredCount} extra page(s) ignored`
+        : `HTML: ${primaryName}`
+    );
+  }
 
   // 3. Read all CSS files
   setMsg(`Reading ${cssRecs.length} CSS file(s)…`);
