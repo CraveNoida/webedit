@@ -124,6 +124,14 @@ function replaceMappedUrl(value: string, map: Map<string, string>): string {
   if (!trimmed || /^(?:data|blob):/i.test(trimmed)) return value;
 
   const { path, suffix } = splitUrlParts(trimmed);
+  const urlPath = (() => {
+    try {
+      return new URL(trimmed, "http://local.invalid").pathname;
+    } catch {
+      return path;
+    }
+  })();
+  const basename = urlPath.split("/").filter(Boolean).pop() ?? path.split("/").filter(Boolean).pop() ?? "";
   const candidates = [
     trimmed,
     safeDecode(trimmed),
@@ -131,6 +139,12 @@ function replaceMappedUrl(value: string, map: Map<string, string>): string {
     safeDecode(path),
     path.replace(/^\/+/, ""),
     safeDecode(path.replace(/^\/+/, "")),
+    urlPath,
+    safeDecode(urlPath),
+    urlPath.replace(/^\/+/, ""),
+    safeDecode(urlPath.replace(/^\/+/, "")),
+    basename,
+    safeDecode(basename),
   ];
 
   for (const candidate of candidates) {
