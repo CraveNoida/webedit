@@ -24,6 +24,95 @@ function stripImportedExtraPages(html: string): string {
   return html.replace(/[\r\n]*\s*<!--\s*═══[\s\S]*?(?=<\/body>)/i, "\n");
 }
 
+function hasAttr(tag: string, attr: string): boolean {
+  return new RegExp(`\\b${attr}\\s*=`, "i").test(tag);
+}
+
+function getAttr(tag: string, attr: string): string | null {
+  const quoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  if (quoted) return quoted[2];
+
+  const unquoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*([^\\s>]+)`, "i"));
+  return unquoted?.[1] ?? null;
+}
+
+function removeAttrs(tag: string, attrs: string[]): string {
+  let out = tag;
+  for (const attr of attrs) {
+    out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*(["']).*?\\1`, "gi"), "");
+    out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*[^\\s>]+`, "gi"), "");
+  }
+  return out;
+}
+
+function escapeDoubleQuotedAttr(value: string): string {
+  return value
+    .replace(/&(?!(?:[a-z][a-z0-9]+|#\d+|#x[\da-f]+);)/gi, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
+function appendDoubleQuotedAttr(tag: string, attr: string, value: string): string {
+  return tag.replace(/\s*\/?>$/, (ending) => {
+    const close = ending.trim() === "/>" ? " />" : ">";
+    return ` ${attr}="${escapeDoubleQuotedAttr(value)}"${close}`;
+  });
+}
+
+function formatCssUrl(value: string): string {
+  return `url('${value.replace(/\r?\n/g, "").replace(/\\/g, "\\\\").replace(/'/g, "%27")}')`;
+}
+
+function promoteRenderableImages(html: string): string {
+  const lazyAttrs = ["data-src", "data-lazy-src", "data-original", "data-image"];
+  const bgAttrs = ["data-bg", "data-background", "data-bg-src"];
+
+  return html
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const lazyValue = lazyAttrs.map((attr) => getAttr(tag, attr)).find((value) => value && !value.includes("{{"));
+      let out = tag;
+
+      if (lazyValue && (!getAttr(out, "src") || getAttr(out, "src")?.startsWith("data:image/svg+xml,%3Csvg"))) {
+        if (hasAttr(out, "src")) {
+          out = out.replace(/\bsrc\s*=\s*(["']).*?\1/i, `src="${escapeDoubleQuotedAttr(lazyValue)}"`);
+          out = out.replace(/\bsrc\s*=\s*[^\s>]+/i, `src="${escapeDoubleQuotedAttr(lazyValue)}"`);
+        } else {
+          out = appendDoubleQuotedAttr(out, "src", lazyValue);
+        }
+      }
+
+      if (getAttr(out, "src")?.startsWith("data:")) {
+        out = removeAttrs(out, ["srcset", "data-srcset"]);
+      }
+
+      return out;
+    })
+    .replace(/<source\b[^>]*>/gi, (tag) => {
+      const srcset = getAttr(tag, "srcset") ?? getAttr(tag, "data-srcset");
+      if (!srcset?.includes("data:")) return tag;
+      return removeAttrs(tag, ["srcset", "data-srcset"]);
+    })
+    .replace(/<([a-z][\w:-]*)\b[^>]*>/gi, (tag) => {
+      const bgValue = bgAttrs.map((attr) => getAttr(tag, attr)).find((value) => value && !value.includes("{{"));
+      if (!bgValue || /<img\b/i.test(tag)) return tag;
+
+      const style = getAttr(tag, "style");
+      const backgroundImage = `background-image: ${formatCssUrl(bgValue)};`;
+      const cleanedStyle = style
+        ?.replace(/background(?:-image)?\s*:\s*url\([^)]*\)\s*;?/i, "")
+        .trim()
+        .replace(/;$/, "");
+      const nextStyle = style
+        ? [cleanedStyle, backgroundImage].filter(Boolean).join("; ")
+        : backgroundImage;
+
+      if (hasAttr(tag, "style")) {
+        return tag.replace(/\bstyle\s*=\s*(["']).*?\1/i, `style="${escapeDoubleQuotedAttr(nextStyle)}"`);
+      }
+
+      return appendDoubleQuotedAttr(tag, "style", nextStyle);
+    });
+}
+
 /**
  * Prepares generated HTML for offline use:
  * - Removes relative-path CSS/JS refs that don't exist in the ZIP
@@ -32,7 +121,7 @@ function stripImportedExtraPages(html: string): string {
  *   GSAP/ScrollTrigger/AOS/WOW.js animations that keep sections at opacity:0
  */
 function prepareDownloadHtml(html: string): string {
-  let out = stripImportedExtraPages(html);
+  let out = promoteRenderableImages(stripImportedExtraPages(html));
 
   // Replace older preview guards so existing generated projects receive the newest fix.
   out = out
@@ -373,7 +462,7 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
     html = html.replaceAll(key, value);
   }
 
-  return replaceUnresolvedLocalImages(inlineAvailableServerUploads(html));
+  return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
 }
 
 async function prepareTemplateForProject(template: ProjectTemplate): Promise<ProjectTemplate> {
