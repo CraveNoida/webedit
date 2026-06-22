@@ -3,6 +3,8 @@ import { db, projectsTable, templatesTable } from "@workspace/db";
 import { eq, ilike, or } from "drizzle-orm";
 import { injectPlaceholders } from "../utils/inject-placeholders";
 import { ZipArchive } from "archiver";
+import fs from "fs";
+import path from "path";
 import {
   ListProjectsQueryParams,
   CreateProjectBody,
@@ -236,6 +238,70 @@ function shouldReplaceImageUrl(url: string): boolean {
   return isLocalImageUrl(url);
 }
 
+function isServerUploadUrl(url: string): boolean {
+  return /^\/?api\/uploads\//i.test(url.trim()) || /^https?:\/\/[^/]+\/api\/uploads\//i.test(url.trim());
+}
+
+function mimeTypeForFilename(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".ico") return "image/x-icon";
+  if (ext === ".bmp") return "image/bmp";
+  if (ext === ".avif") return "image/avif";
+  return "image/png";
+}
+
+function dataUrlForServerUpload(url: string): string | null {
+  if (!isServerUploadUrl(url)) return null;
+
+  let pathname = url.trim().split(/[?#]/)[0];
+  try {
+    pathname = new URL(url, "http://local.invalid").pathname;
+  } catch {
+    // Keep the split path above for relative URLs.
+  }
+
+  const marker = "/api/uploads/";
+  const index = pathname.toLowerCase().lastIndexOf(marker);
+  if (index < 0) return null;
+
+  const rawFilename = pathname.slice(index + marker.length);
+  const filename = path.basename(decodeURIComponent(rawFilename));
+  const filePath = path.join(process.cwd(), "uploads", filename);
+  if (!fs.existsSync(filePath)) return null;
+
+  const base64 = fs.readFileSync(filePath).toString("base64");
+  return `data:${mimeTypeForFilename(filename)};base64,${base64}`;
+}
+
+function inlineAvailableServerUploads(html: string): string {
+  const cache = new Map<string, string | null>();
+  const getDataUrl = (url: string) => {
+    if (!cache.has(url)) cache.set(url, dataUrlForServerUpload(url));
+    return cache.get(url);
+  };
+
+  return html
+    .replace(
+      /\b(src|data-src|data-bg)=["']([^"']+)["']/gi,
+      (match, attr: string, url: string) => {
+        const dataUrl = getDataUrl(url);
+        return dataUrl ? `${attr}="${dataUrl}"` : match;
+      },
+    )
+    .replace(
+      /url\((["']?)([^"')]+)\1\)/gi,
+      (match, quote: string, url: string) => {
+        const dataUrl = getDataUrl(url);
+        return dataUrl ? `url(${quote}${dataUrl}${quote})` : match;
+      },
+    );
+}
+
 function replaceUnresolvedLocalImages(html: string): string {
   return html
     .replace(
@@ -307,7 +373,7 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
     html = html.replaceAll(key, value);
   }
 
-  return replaceUnresolvedLocalImages(html);
+  return replaceUnresolvedLocalImages(inlineAvailableServerUploads(html));
 }
 
 async function prepareTemplateForProject(template: ProjectTemplate): Promise<ProjectTemplate> {

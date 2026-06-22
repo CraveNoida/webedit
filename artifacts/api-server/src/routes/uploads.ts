@@ -12,13 +12,21 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${unique}${path.extname(file.originalname)}`);
-  },
-});
+const storage = multer.memoryStorage();
+
+function mimeTypeForFilename(filename: string, fallback: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  if (fallback && fallback !== "application/octet-stream") return fallback;
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".ico") return "image/x-icon";
+  if (ext === ".bmp") return "image/bmp";
+  if (ext === ".avif") return "image/avif";
+  return "image/png";
+}
 
 const upload = multer({
   storage,
@@ -34,9 +42,12 @@ router.post("/", upload.single("file"), (req, res): void => {
     res.status(400).json({ error: "No file uploaded" });
     return;
   }
+
+  const mimeType = mimeTypeForFilename(req.file.originalname, req.file.mimetype);
+  const dataUrl = `data:${mimeType};base64,${req.file.buffer.toString("base64")}`;
   res.json({
-    url: `/api/uploads/${req.file.filename}`,
-    filename: req.file.filename,
+    url: dataUrl,
+    filename: req.file.originalname,
   });
 });
 
