@@ -25,14 +25,15 @@ function stripImportedExtraPages(html: string): string {
 }
 
 function hasAttr(tag: string, attr: string): boolean {
-  return new RegExp(`\\b${attr}\\s*=`, "i").test(tag);
+  return new RegExp(`(?:^|\\s)${escapeRegExp(attr)}\\s*=`, "i").test(tag);
 }
 
 function getAttr(tag: string, attr: string): string | null {
-  const quoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  const name = escapeRegExp(attr);
+  const quoted = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])(.*?)\\1`, "i"));
   if (quoted) return quoted[2];
 
-  const unquoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*([^\\s>]+)`, "i"));
+  const unquoted = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*([^\\s>]+)`, "i"));
   return unquoted?.[1] ?? null;
 }
 
@@ -43,6 +44,10 @@ function removeAttrs(tag: string, attrs: string[]): string {
     out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*[^\\s>]+`, "gi"), "");
   }
   return out;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function escapeDoubleQuotedAttr(value: string): string {
@@ -73,8 +78,8 @@ function promoteRenderableImages(html: string): string {
 
       if (lazyValue && (!getAttr(out, "src") || getAttr(out, "src")?.startsWith("data:image/svg+xml,%3Csvg"))) {
         if (hasAttr(out, "src")) {
-          out = out.replace(/\bsrc\s*=\s*(["']).*?\1/i, `src="${escapeDoubleQuotedAttr(lazyValue)}"`);
-          out = out.replace(/\bsrc\s*=\s*[^\s>]+/i, `src="${escapeDoubleQuotedAttr(lazyValue)}"`);
+          out = out.replace(/(\s)src\s*=\s*(["']).*?\2/i, `$1src="${escapeDoubleQuotedAttr(lazyValue)}"`);
+          out = out.replace(/(\s)src\s*=\s*[^\s>]+/i, `$1src="${escapeDoubleQuotedAttr(lazyValue)}"`);
         } else {
           out = appendDoubleQuotedAttr(out, "src", lazyValue);
         }
@@ -106,7 +111,7 @@ function promoteRenderableImages(html: string): string {
         : backgroundImage;
 
       if (hasAttr(tag, "style")) {
-        return tag.replace(/\bstyle\s*=\s*(["']).*?\1/i, `style="${escapeDoubleQuotedAttr(nextStyle)}"`);
+        return tag.replace(/(\s)style\s*=\s*(["']).*?\2/i, `$1style="${escapeDoubleQuotedAttr(nextStyle)}"`);
       }
 
       return appendDoubleQuotedAttr(tag, "style", nextStyle);
