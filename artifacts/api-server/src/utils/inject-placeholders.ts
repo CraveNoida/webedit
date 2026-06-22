@@ -1,4 +1,6 @@
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const MEDIA_ATTRS =
+  "src|srcset|poster|data-src|data-srcset|data-bg|data-background|data-bg-src|data-lazy-src|data-original|data-image|style";
 
 function isImportedAsset(url: string): boolean {
   return (
@@ -6,6 +8,35 @@ function isImportedAsset(url: string): boolean {
     /^\/?api\/uploads\//i.test(url) ||
     /^https?:\/\/[^/]+\/api\/uploads\//i.test(url)
   );
+}
+
+function maskMediaValues(html: string): { html: string; restore: (masked: string) => string } {
+  const values: string[] = [];
+  const tokenFor = (value: string) => {
+    const token = `__WJ_MEDIA_${values.length}__`;
+    values.push(value);
+    return token;
+  };
+
+  const masked = html
+    .replace(
+      new RegExp(`\\b(${MEDIA_ATTRS})\\s*=\\s*(["'])(.*?)\\2`, "gi"),
+      (_match, attr: string, quote: string, value: string) => `${attr}=${quote}${tokenFor(value)}${quote}`,
+    )
+    .replace(
+      new RegExp(`\\b(${MEDIA_ATTRS})\\s*=\\s*([^"'\\s>]+)`, "gi"),
+      (_match, attr: string, value: string) => `${attr}="${tokenFor(value)}"`,
+    )
+    .replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (_match, quote: string, value: string) => {
+      return `url(${quote}${tokenFor(value)}${quote})`;
+    });
+
+  return {
+    html: masked,
+    restore(maskedHtml: string) {
+      return maskedHtml.replace(/__WJ_MEDIA_(\d+)__/g, (_match, index: string) => values[Number(index)] ?? "");
+    },
+  };
 }
 
 export function injectPlaceholders(html: string): {
@@ -22,6 +53,8 @@ export function injectPlaceholders(html: string): {
   const h1Match = result.match(/<h1[^>]*>\s*(?:<[^>]+>)*\s*([^<]{3,}?)\s*(?:<\/[^>]+>)*\s*<\/h1>/i);
 
   let extractedName: string | null = null;
+  const mediaMask = maskMediaValues(result);
+  result = mediaMask.html;
 
   if (titleMatch && !titleMatch[1].includes("{{")) {
     const candidate = titleMatch[1].trim().split(/\s*[—–|\-]\s*/)[0].trim();
@@ -85,6 +118,8 @@ export function injectPlaceholders(html: string): {
     result = result.replace(/href="mailto:[^"]*"/g, 'href="mailto:{{email}}"');
     ph.add("{{email}}"); ph.add("{{emailLink}}");
   }
+
+  result = mediaMask.restore(result);
 
   // 4. Hero / background image
   const bgMatch = result.match(/background(?:-image)?\s*:\s*url\(['"]?([^'")\s]+)['"]?\)/);
