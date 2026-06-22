@@ -272,6 +272,22 @@ function promoteLazyImages(html: string): string {
     });
 }
 
+function replaceRemainingUploadRefs(content: string, fallbackUrls: string[]): string {
+  if (fallbackUrls.length === 0) return content;
+
+  let nextIndex = 0;
+  const assigned = new Map<string, string>();
+  const uploadUrlPattern = /(?:https?:\/\/[^"'\s(),>]+)?\/?api\/uploads\/[^"'\s(),>]+/gi;
+
+  return content.replace(uploadUrlPattern, (url) => {
+    if (!assigned.has(url)) {
+      assigned.set(url, fallbackUrls[nextIndex % fallbackUrls.length]);
+      nextIndex++;
+    }
+    return assigned.get(url) ?? url;
+  });
+}
+
 function stripLocalRefs(html: string): string {
   return html
     .replace(/<link\b[^>]*\bhref=["'](?!https?:\/\/|\/\/)([^"']+\.css)["'][^>]*>/gi, "")
@@ -296,16 +312,18 @@ async function processFiles(
   // 1. Embed all images in parallel so generated sites work on any device.
   if (imageRecs.length > 0) setMsg(`Embedding ${imageRecs.length} image(s)…`);
   const imageMap = new Map<string, string>();
-  let embeddedCount = 0;
-  await Promise.all(
+  const embeddedUrls = (
+    await Promise.all(
     imageRecs.map(async ({ relPath, file }) => {
       const url = await fileToDataUrl(file, toast);
       if (url) {
         buildImageMap(relPath, url, imageMap);
-        embeddedCount++;
       }
+      return url;
     })
-  );
+    )
+  ).filter((url): url is string => Boolean(url));
+  const embeddedCount = embeddedUrls.length;
   if (embeddedCount > 0) summary.push(`${embeddedCount} image(s) embedded`);
 
   // 2. Read all HTML files sequentially (preserve order)
@@ -350,8 +368,8 @@ async function processFiles(
 
   // 5. Replace image refs in HTML and CSS, strip local <link>/<script src>
   if (embeddedCount > 0) setMsg("Replacing image references…");
-  const html = stripLocalRefs(promoteLazyImages(replaceRefs(mergedHtml, imageMap)));
-  const processedCss = replaceRefs(css, imageMap);
+  const html = stripLocalRefs(promoteLazyImages(replaceRemainingUploadRefs(replaceRefs(mergedHtml, imageMap), embeddedUrls)));
+  const processedCss = replaceRemainingUploadRefs(replaceRefs(css, imageMap), embeddedUrls);
   if (embeddedCount > 0) summary.push("Image references updated in HTML/CSS");
 
   return { html, css: processedCss, js, summary, mergedHtmlFiles, mergedCssFiles, mergedJsFiles };
