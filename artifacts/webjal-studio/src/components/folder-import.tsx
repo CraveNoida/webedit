@@ -371,6 +371,10 @@ async function processFiles(
   const html = stripLocalRefs(promoteLazyImages(replaceRemainingUploadRefs(replaceRefs(mergedHtml, imageMap), embeddedUrls)));
   const processedCss = replaceRemainingUploadRefs(replaceRefs(css, imageMap), embeddedUrls);
   if (embeddedCount > 0) summary.push("Image references updated in HTML/CSS");
+  const remainingUploadRefs = (html.match(/\/?api\/uploads\//gi)?.length ?? 0) + (processedCss.match(/\/?api\/uploads\//gi)?.length ?? 0);
+  if (remainingUploadRefs > 0) {
+    summary.push(`${remainingUploadRefs} old upload link(s) still need matching image files in the folder`);
+  }
 
   return { html, css: processedCss, js, summary, mergedHtmlFiles, mergedCssFiles, mergedJsFiles };
 }
