@@ -106,16 +106,156 @@ function buildImageMap(relPath: string, url: string, map: Map<string, string>) {
   });
 }
 
+function splitUrlParts(value: string): { path: string; suffix: string } {
+  const match = value.match(/^([^?#]*)([?#].*)?$/);
+  return { path: match?.[1] ?? value, suffix: match?.[2] ?? "" };
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURI(value);
+  } catch {
+    return value;
+  }
+}
+
+function replaceMappedUrl(value: string, map: Map<string, string>): string {
+  const trimmed = value.trim();
+  if (!trimmed || /^(?:data|blob):/i.test(trimmed)) return value;
+
+  const { path, suffix } = splitUrlParts(trimmed);
+  const candidates = [
+    trimmed,
+    safeDecode(trimmed),
+    path,
+    safeDecode(path),
+    path.replace(/^\/+/, ""),
+    safeDecode(path.replace(/^\/+/, "")),
+  ];
+
+  for (const candidate of candidates) {
+    const mapped = map.get(candidate);
+    if (mapped) return mapped + suffix;
+  }
+
+  return value;
+}
+
+function replaceSrcset(value: string, map: Map<string, string>): string {
+  return value
+    .split(",")
+    .map((candidate) => {
+      const trimmed = candidate.trim();
+      if (!trimmed) return candidate;
+      const [url, ...descriptors] = trimmed.split(/\s+/);
+      const replaced = replaceMappedUrl(url, map);
+      return [replaced, ...descriptors].join(" ");
+    })
+    .join(", ");
+}
+
 function replaceRefs(content: string, map: Map<string, string>): string {
-  let out = content;
-  map.forEach((newUrl, orig) => {
-    const esc = orig.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    out = out
-      .replace(new RegExp(`((?:src|href|data-src|data-bg)=["'])${esc}((?:[?#][^"']*)?["'])`, "gi"), `$1${newUrl}$2`)
-      .replace(new RegExp(`((?:srcset)=["'][^"']*)${esc}((?:[?#][^"',\\s]*)?[^"']*["'])`, "gi"), `$1${newUrl}$2`)
-      .replace(new RegExp(`(url\\(["']?)${esc}((?:[?#][^"')\\s]*)?["']?\\))`, "gi"), `$1${newUrl}$2`);
-  });
+  const attrs = [
+    "src",
+    "href",
+    "poster",
+    "data-src",
+    "data-bg",
+    "data-background",
+    "data-bg-src",
+    "data-lazy-src",
+    "data-original",
+    "data-image",
+    "srcset",
+    "data-srcset",
+  ].join("|");
+
+  return content
+    .replace(
+      new RegExp(`\\b(${attrs})\\s*=\\s*(["'])(.*?)\\2`, "gi"),
+      (match, attr: string, quote: string, value: string) => {
+        const replaced = /srcset$/i.test(attr) ? replaceSrcset(value, map) : replaceMappedUrl(value, map);
+        return `${attr}=${quote}${replaced}${quote}`;
+      }
+    )
+    .replace(
+      new RegExp(`\\b(${attrs})\\s*=\\s*([^"'\\s>]+)`, "gi"),
+      (match, attr: string, value: string) => {
+        const replaced = /srcset$/i.test(attr) ? replaceSrcset(value, map) : replaceMappedUrl(value, map);
+        return `${attr}="${replaced}"`;
+      }
+    )
+    .replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (match, quote: string, value: string) => {
+      const replaced = replaceMappedUrl(value, map);
+      return `url(${quote}${replaced}${quote})`;
+    });
+}
+
+function hasAttr(tag: string, attr: string): boolean {
+  return new RegExp(`\\b${attr}\\s*=`, "i").test(tag);
+}
+
+function getAttr(tag: string, attr: string): string | null {
+  const quoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  if (quoted) return quoted[2];
+
+  const unquoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*([^\\s>]+)`, "i"));
+  return unquoted?.[1] ?? null;
+}
+
+function removeAttrs(tag: string, attrs: string[]): string {
+  let out = tag;
+  for (const attr of attrs) {
+    out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*(["']).*?\\1`, "gi"), "");
+    out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*[^\\s>]+`, "gi"), "");
+  }
   return out;
+}
+
+function promoteLazyImages(html: string): string {
+  const lazyAttrs = ["data-src", "data-lazy-src", "data-original", "data-image"];
+  const bgAttrs = ["data-bg", "data-background", "data-bg-src"];
+
+  return html
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const lazyValue = lazyAttrs.map((attr) => getAttr(tag, attr)).find((value) => value?.startsWith("data:"));
+      let out = tag;
+
+      if (lazyValue) {
+        if (hasAttr(out, "src")) {
+          out = out.replace(/\bsrc\s*=\s*(["']).*?\1/i, `src="${lazyValue}"`);
+          out = out.replace(/\bsrc\s*=\s*[^\s>]+/i, `src="${lazyValue}"`);
+        } else {
+          out = out.replace(/>$/, ` src="${lazyValue}">`);
+        }
+      }
+
+      if (getAttr(out, "src")?.startsWith("data:")) {
+        out = removeAttrs(out, ["srcset", "data-srcset"]);
+      }
+
+      return out;
+    })
+    .replace(/<source\b[^>]*>/gi, (tag) => {
+      const srcset = getAttr(tag, "srcset") ?? getAttr(tag, "data-srcset");
+      if (!srcset?.includes("data:")) return tag;
+      return removeAttrs(tag, ["srcset", "data-srcset"]);
+    })
+    .replace(/<([a-z][\w:-]*)\b[^>]*>/gi, (tag) => {
+      const bgValue = bgAttrs.map((attr) => getAttr(tag, attr)).find((value) => value?.startsWith("data:"));
+      if (!bgValue || /<img\b/i.test(tag)) return tag;
+
+      const style = getAttr(tag, "style");
+      const nextStyle = style
+        ? style.replace(/background(?:-image)?\s*:\s*url\([^)]*\)\s*;?/i, "") + `; background-image: url("${bgValue}");`
+        : `background-image: url("${bgValue}");`;
+
+      if (hasAttr(tag, "style")) {
+        return tag.replace(/\bstyle\s*=\s*(["']).*?\1/i, `style="${nextStyle}"`);
+      }
+
+      return tag.replace(/>$/, ` style="${nextStyle}">`);
+    });
 }
 
 function stripLocalRefs(html: string): string {
@@ -196,7 +336,7 @@ async function processFiles(
 
   // 5. Replace image refs in HTML and CSS, strip local <link>/<script src>
   if (embeddedCount > 0) setMsg("Replacing image references…");
-  const html = stripLocalRefs(replaceRefs(mergedHtml, imageMap));
+  const html = stripLocalRefs(promoteLazyImages(replaceRefs(mergedHtml, imageMap)));
   const processedCss = replaceRefs(css, imageMap);
   if (embeddedCount > 0) summary.push("Image references updated in HTML/CSS");
 
