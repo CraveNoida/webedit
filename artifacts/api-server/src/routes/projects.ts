@@ -232,17 +232,25 @@ function isLocalImageUrl(url: string): boolean {
   return /\.(?:jpe?g|png|webp|gif|svg|ico|bmp|avif)(?:[?#].*)?$/i.test(clean);
 }
 
+function isServerUploadUrl(url: string): boolean {
+  return /^\/?api\/uploads\//i.test(url.trim()) || /^https?:\/\/[^/]+\/api\/uploads\//i.test(url.trim());
+}
+
+function shouldReplaceImageUrl(url: string): boolean {
+  return isLocalImageUrl(url) || isServerUploadUrl(url);
+}
+
 function replaceUnresolvedLocalImages(html: string): string {
   return html
     .replace(
       /\b(src|data-src|data-bg)=["']([^"']+)["']/gi,
       (match, attr: string, url: string) =>
-        isLocalImageUrl(url) ? `${attr}="${DEFAULT_HERO_IMAGE_URL}"` : match,
+        shouldReplaceImageUrl(url) ? `${attr}="${DEFAULT_HERO_IMAGE_URL}"` : match,
     )
     .replace(
       /url\((["']?)([^"')]+)\1\)/gi,
       (match, quote: string, url: string) =>
-        isLocalImageUrl(url) ? `url(${quote}${DEFAULT_HERO_IMAGE_URL}${quote})` : match,
+        shouldReplaceImageUrl(url) ? `url(${quote}${DEFAULT_HERO_IMAGE_URL}${quote})` : match,
     );
 }
 
@@ -272,7 +280,7 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
     "{{ctaText}}": getProjectValue(data, "ctaText", "Get In Touch"),
     "{{primaryColor}}": getProjectValue(data, "primaryColor", "#4f46e5"),
     "{{secondaryColor}}": getProjectValue(data, "secondaryColor", "#7c3aed"),
-    "{{logoUrl}}": getProjectValue(data, "logoUrl"),
+    "{{logoUrl}}": getProjectValue(data, "logoUrl", heroImageUrl),
     "{{heroImage}}": heroImageUrl,
     "{{heroImageUrl}}": heroImageUrl,
     "{{whatsappLink}}": `https://wa.me/${getProjectValue(data, "whatsapp").replace(/[^0-9]/g, "")}`,

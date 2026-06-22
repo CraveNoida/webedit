@@ -1,7 +1,11 @@
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function isImportedAsset(url: string): boolean {
-  return /^\/?api\/uploads\//i.test(url) || /^https?:\/\/[^/]+\/api\/uploads\//i.test(url);
+  return (
+    /^(?:data|blob):/i.test(url) ||
+    /^\/?api\/uploads\//i.test(url) ||
+    /^https?:\/\/[^/]+\/api\/uploads\//i.test(url)
+  );
 }
 
 export function injectPlaceholders(html: string): {
