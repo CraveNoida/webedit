@@ -18,6 +18,10 @@ const router = Router();
 const DEFAULT_HERO_IMAGE_URL =
   "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1600&q=80";
 
+function stripImportedExtraPages(html: string): string {
+  return html.replace(/[\r\n]*\s*<!--\s*═══[\s\S]*?(?=<\/body>)/i, "\n");
+}
+
 /**
  * Prepares generated HTML for offline use:
  * - Removes relative-path CSS/JS refs that don't exist in the ZIP
@@ -26,7 +30,7 @@ const DEFAULT_HERO_IMAGE_URL =
  *   GSAP/ScrollTrigger/AOS/WOW.js animations that keep sections at opacity:0
  */
 function prepareDownloadHtml(html: string): string {
-  let out = html;
+  let out = stripImportedExtraPages(html);
 
   // Replace older preview guards so existing generated projects receive the newest fix.
   out = out
@@ -303,7 +307,8 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
 }
 
 async function prepareTemplateForProject(template: ProjectTemplate): Promise<ProjectTemplate> {
-  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(template.htmlContent);
+  const cleanedHtml = stripImportedExtraPages(template.htmlContent);
+  const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(cleanedHtml);
   const mergedPh = [...new Set([...(template.placeholders ?? []), ...detectedPh])];
 
   if (injectedHtml === template.htmlContent && mergedPh.length === (template.placeholders ?? []).length) {

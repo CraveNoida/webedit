@@ -2,7 +2,6 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiUrl } from "@/lib/api-url";
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp", ".avif"]);
 const CSS_EXTS = new Set([".css"]);
@@ -45,18 +44,18 @@ function entryToFile(entry: FileSystemFileEntry): Promise<File> {
   return new Promise((res, rej) => entry.file(res, rej));
 }
 
-// ── Image upload ──────────────────────────────────────────────────────────────
+// ── Image embedding ───────────────────────────────────────────────────────────
 
-async function uploadFile(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
-  const fd = new FormData();
-  fd.append("file", file);
+async function fileToDataUrl(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
   try {
-    const r = await fetch(apiUrl("/api/uploads"), { method: "POST", body: fd });
-    if (!r.ok) throw new Error();
-    const data = (await r.json()) as { url: string };
-    return apiUrl(data.url);
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
   } catch {
-    toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
+    toast({ title: `Failed to read ${file.name}`, variant: "destructive" });
     return null;
   }
 }
@@ -140,20 +139,20 @@ async function processFiles(
 ): Promise<{ html: string; css: string; js: string; summary: string[]; mergedHtmlFiles: string[]; mergedCssFiles: string[]; mergedJsFiles: string[] }> {
   const summary: string[] = [];
 
-  // 1. Upload all images in parallel
-  if (imageRecs.length > 0) setMsg(`Uploading ${imageRecs.length} image(s)…`);
+  // 1. Embed all images in parallel so generated sites work on any device.
+  if (imageRecs.length > 0) setMsg(`Embedding ${imageRecs.length} image(s)…`);
   const imageMap = new Map<string, string>();
-  let uploadedCount = 0;
+  let embeddedCount = 0;
   await Promise.all(
     imageRecs.map(async ({ relPath, file }) => {
-      const url = await uploadFile(file, toast);
+      const url = await fileToDataUrl(file, toast);
       if (url) {
         buildImageMap(relPath, url, imageMap);
-        uploadedCount++;
+        embeddedCount++;
       }
     })
   );
-  if (uploadedCount > 0) summary.push(`${uploadedCount} image(s) uploaded`);
+  if (embeddedCount > 0) summary.push(`${embeddedCount} image(s) embedded`);
 
   // 2. Read all HTML files sequentially (preserve order)
   setMsg(`Reading ${htmlRecs.length} HTML file(s)…`);
@@ -196,10 +195,10 @@ async function processFiles(
   if (jsRecs.length > 0) summary.push(`JS: ${mergedJsFiles.join(" + ")}`);
 
   // 5. Replace image refs in HTML and CSS, strip local <link>/<script src>
-  if (uploadedCount > 0) setMsg("Replacing image references…");
+  if (embeddedCount > 0) setMsg("Replacing image references…");
   const html = stripLocalRefs(replaceRefs(mergedHtml, imageMap));
   const processedCss = replaceRefs(css, imageMap);
-  if (uploadedCount > 0) summary.push("Image references updated in HTML/CSS");
+  if (embeddedCount > 0) summary.push("Image references updated in HTML/CSS");
 
   return { html, css: processedCss, js, summary, mergedHtmlFiles, mergedCssFiles, mergedJsFiles };
 }
