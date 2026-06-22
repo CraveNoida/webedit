@@ -16,7 +16,7 @@ import {
 
 const router = Router();
 const DEFAULT_HERO_IMAGE_URL =
-  "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=1600&q=80";
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E";
 
 function stripImportedExtraPages(html: string): string {
   return html.replace(/[\r\n]*\s*<!--\s*═══[\s\S]*?(?=<\/body>)/i, "\n");
@@ -232,12 +232,8 @@ function isLocalImageUrl(url: string): boolean {
   return /\.(?:jpe?g|png|webp|gif|svg|ico|bmp|avif)(?:[?#].*)?$/i.test(clean);
 }
 
-function isServerUploadUrl(url: string): boolean {
-  return /^\/?api\/uploads\//i.test(url.trim()) || /^https?:\/\/[^/]+\/api\/uploads\//i.test(url.trim());
-}
-
 function shouldReplaceImageUrl(url: string): boolean {
-  return isLocalImageUrl(url) || isServerUploadUrl(url);
+  return isLocalImageUrl(url);
 }
 
 function replaceUnresolvedLocalImages(html: string): string {
