@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api-url";
 
 const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp", ".avif"]);
 const CSS_EXTS = new Set([".css"]);
@@ -46,16 +47,19 @@ function entryToFile(entry: FileSystemFileEntry): Promise<File> {
 
 // ── Image embedding ───────────────────────────────────────────────────────────
 
-async function fileToDataUrl(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
+async function uploadImageFile(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
   try {
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(apiUrl("/api/uploads"), {
+      method: "POST",
+      body: formData,
     });
+    if (!response.ok) throw new Error("Upload failed");
+    const data = await response.json() as { url?: string };
+    return data.url ? apiUrl(data.url) : null;
   } catch {
-    toast({ title: `Failed to read ${file.name}`, variant: "destructive" });
+    toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
     return null;
   }
 }
@@ -342,7 +346,7 @@ async function processFiles(
   const embeddedUrls = (
     await Promise.all(
     imageRecs.map(async ({ relPath, file }) => {
-      const url = await fileToDataUrl(file, toast);
+      const url = await uploadImageFile(file, toast);
       if (url) {
         buildImageMap(relPath, url, imageMap);
       }
@@ -351,7 +355,7 @@ async function processFiles(
     )
   ).filter((url): url is string => Boolean(url));
   const embeddedCount = embeddedUrls.length;
-  if (embeddedCount > 0) summary.push(`${embeddedCount} image(s) embedded`);
+  if (embeddedCount > 0) summary.push(`${embeddedCount} image(s) uploaded`);
 
   // 2. Read all HTML files sequentially (preserve order)
   setMsg(`Reading ${htmlRecs.length} HTML file(s)…`);

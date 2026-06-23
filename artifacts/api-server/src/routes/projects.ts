@@ -5,6 +5,7 @@ import { injectPlaceholders } from "../utils/inject-placeholders";
 import { ZipArchive } from "archiver";
 import fs from "fs";
 import path from "path";
+import { persistDataImageUrls } from "../lib/media-assets";
 import {
   ListProjectsQueryParams,
   CreateProjectBody,
@@ -313,6 +314,32 @@ type ProjectData = {
   galleryImages?: string[] | null;
 };
 
+async function persistProjectImageFields(
+  data: Record<string, unknown>,
+  req: Parameters<typeof persistDataImageUrls>[1],
+): Promise<Record<string, unknown>> {
+  const out = { ...data };
+
+  for (const field of ["logoUrl", "heroImageUrl", "generatedHtml"] as const) {
+    const value = out[field];
+    if (typeof value === "string" && value.includes("data:image")) {
+      out[field] = await persistDataImageUrls(value, req);
+    }
+  }
+
+  if (Array.isArray(out.galleryImages)) {
+    out.galleryImages = await Promise.all(
+      out.galleryImages.map((value) =>
+        typeof value === "string" && value.includes("data:image")
+          ? persistDataImageUrls(value, req)
+          : value,
+      ),
+    );
+  }
+
+  return out;
+}
+
 function getProjectValue(data: ProjectData, key: keyof ProjectData, fallback = ""): string {
   const value = data[key];
   if (typeof value !== "string") return fallback;
@@ -531,6 +558,12 @@ router.post("/", async (req, res): Promise<void> => {
     return;
   }
 
+  const imageFields = await persistProjectImageFields({
+    logoUrl: body.data.logoUrl ?? null,
+    heroImageUrl: body.data.heroImageUrl ?? null,
+    galleryImages: body.data.galleryImages ?? [],
+  }, req);
+
   const [project] = await db
     .insert(projectsTable)
     .values({
@@ -549,9 +582,9 @@ router.post("/", async (req, res): Promise<void> => {
       ctaText: body.data.ctaText ?? null,
       primaryColor: body.data.primaryColor ?? "#4f46e5",
       secondaryColor: body.data.secondaryColor ?? "#7c3aed",
-      logoUrl: body.data.logoUrl ?? null,
-      heroImageUrl: body.data.heroImageUrl ?? null,
-      galleryImages: body.data.galleryImages ?? [],
+      logoUrl: imageFields.logoUrl as string | null,
+      heroImageUrl: imageFields.heroImageUrl as string | null,
+      galleryImages: imageFields.galleryImages as string[],
       templateId: body.data.templateId ?? null,
       status: "draft",
     })
@@ -634,6 +667,8 @@ router.put("/:id", async (req, res): Promise<void> => {
       updateData[field] = (body.data as Record<string, unknown>)[field];
     }
   }
+
+  Object.assign(updateData, await persistProjectImageFields(updateData, req));
 
   const didExplicitlyUpdateGeneratedHtml = body.data.generatedHtml !== undefined;
   const didUpdateDetails = Object.keys(updateData).some((field) => field !== "generatedHtml" && field !== "status");

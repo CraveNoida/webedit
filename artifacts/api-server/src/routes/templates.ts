@@ -3,6 +3,7 @@ import { db, templatesTable } from "@workspace/db";
 import { eq, ilike } from "drizzle-orm";
 import { injectPlaceholders } from "../utils/inject-placeholders";
 import { logger } from "../lib/logger";
+import { persistDataImageUrls } from "../lib/media-assets";
 import {
   ListTemplatesQueryParams,
   CreateTemplateBody,
@@ -48,7 +49,13 @@ router.post("/", async (req, res): Promise<void> => {
 
   try {
     // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately.
-    const htmlContent = cleanText(body.data.htmlContent) ?? "";
+    const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
+    const cssContent = body.data.cssContent !== undefined
+      ? await persistDataImageUrls(cleanText(body.data.cssContent) ?? "", req)
+      : null;
+    const thumbnailUrl = body.data.thumbnailUrl?.startsWith("data:image")
+      ? await persistDataImageUrls(body.data.thumbnailUrl, req)
+      : body.data.thumbnailUrl ?? null;
     const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
     const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
 
@@ -59,9 +66,9 @@ router.post("/", async (req, res): Promise<void> => {
         category: body.data.category,
         description: cleanText(body.data.description) ?? null,
         htmlContent: injectedHtml,
-        cssContent: cleanText(body.data.cssContent) ?? null,
+        cssContent,
         jsContent: cleanText(body.data.jsContent) ?? null,
-        thumbnailUrl: body.data.thumbnailUrl ?? null,
+        thumbnailUrl,
         placeholders: mergedPh,
       })
       .returning();
@@ -109,14 +116,18 @@ router.put("/:id", async (req, res): Promise<void> => {
   if (body.data.category !== undefined) updateData.category = body.data.category;
   if (body.data.description !== undefined) updateData.description = cleanText(body.data.description) ?? null;
   if (body.data.htmlContent !== undefined) {
-    const htmlContent = cleanText(body.data.htmlContent) ?? "";
+    const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
     const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
     updateData.htmlContent = injectedHtml;
     updateData.placeholders = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
   }
-  if (body.data.cssContent !== undefined) updateData.cssContent = cleanText(body.data.cssContent) ?? null;
+  if (body.data.cssContent !== undefined) updateData.cssContent = await persistDataImageUrls(cleanText(body.data.cssContent) ?? "", req);
   if (body.data.jsContent !== undefined) updateData.jsContent = cleanText(body.data.jsContent) ?? null;
-  if (body.data.thumbnailUrl !== undefined) updateData.thumbnailUrl = body.data.thumbnailUrl;
+  if (body.data.thumbnailUrl !== undefined) {
+    updateData.thumbnailUrl = body.data.thumbnailUrl.startsWith("data:image")
+      ? await persistDataImageUrls(body.data.thumbnailUrl, req)
+      : body.data.thumbnailUrl;
+  }
   if (body.data.placeholders !== undefined && body.data.htmlContent === undefined) updateData.placeholders = body.data.placeholders;
 
   const [template] = await db

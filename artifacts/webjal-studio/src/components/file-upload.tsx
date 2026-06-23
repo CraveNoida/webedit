@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UploadCloud, Loader2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/api-url";
 
 interface FileUploadProps {
   value: string;
@@ -11,18 +12,22 @@ interface FileUploadProps {
   className?: string;
 }
 
-async function fileToDataUrl(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
+async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
   try {
-    const url = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(apiUrl("/api/uploads"), {
+      method: "POST",
+      body: formData,
     });
+    if (!response.ok) throw new Error("Upload failed");
+    const data = await response.json() as { url?: string };
+    const url = data.url ? apiUrl(data.url) : "";
+    if (!url) throw new Error("Upload failed");
     toast({ title: "Image added successfully" });
     return url;
   } catch {
-    toast({ title: "Image read failed", variant: "destructive" });
+    toast({ title: "Image upload failed", variant: "destructive" });
     return null;
   }
 }
@@ -36,7 +41,7 @@ export function FileUpload({ value, onChange, placeholder = "Image URL...", clas
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    const url = await fileToDataUrl(file, toast);
+    const url = await uploadImage(file, toast);
     if (url) onChange(url);
     setIsUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -99,7 +104,7 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
     setIsUploading(true);
-    const results = await Promise.all(files.map((f) => fileToDataUrl(f, toast)));
+    const results = await Promise.all(files.map((f) => uploadImage(f, toast)));
     const urls = results.filter((u): u is string => u !== null);
     if (urls.length) onChange([...imageList, ...urls]);
     setIsUploading(false);

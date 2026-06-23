@@ -45,4 +45,14 @@ export async function ensureDatabase() {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS media_assets (
+      id serial PRIMARY KEY,
+      filename text NOT NULL,
+      mime_type text NOT NULL,
+      data_base64 text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+  `);
 }

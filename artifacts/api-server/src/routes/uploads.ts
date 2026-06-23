@@ -1,16 +1,13 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
+import { db, mediaAssetsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { createMediaAsset, publicMediaAssetUrl } from "../lib/media-assets";
 
 const router = Router();
 
 const allowedImageExts = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".ico", ".bmp", ".avif"]);
-
-const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
 
 const storage = multer.memoryStorage();
 
@@ -37,28 +34,46 @@ const upload = multer({
   },
 });
 
-router.post("/", upload.single("file"), (req, res): void => {
+router.post("/", upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) {
     res.status(400).json({ error: "No file uploaded" });
     return;
   }
 
   const mimeType = mimeTypeForFilename(req.file.originalname, req.file.mimetype);
-  const dataUrl = `data:${mimeType};base64,${req.file.buffer.toString("base64")}`;
-  res.json({
-    url: dataUrl,
+  const asset = await createMediaAsset({
     filename: req.file.originalname,
+    mimeType,
+    buffer: req.file.buffer,
+  });
+
+  res.json({
+    url: publicMediaAssetUrl(req, asset.id, asset.filename),
+    filename: asset.filename,
   });
 });
 
-router.get("/:filename", (req, res): void => {
-  const filename = path.basename(req.params.filename);
-  const filePath = path.join(uploadDir, filename);
-  if (!fs.existsSync(filePath)) {
+async function sendMediaAsset(req: Request, res: Response): Promise<void> {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid image id" });
+    return;
+  }
+
+  const [asset] = await db.select().from(mediaAssetsTable).where(eq(mediaAssetsTable.id, id));
+  if (!asset) {
     res.status(404).json({ error: "File not found" });
     return;
   }
-  res.sendFile(filePath);
-});
+
+  const buffer = Buffer.from(asset.dataBase64, "base64");
+  res.setHeader("Content-Type", asset.mimeType);
+  res.setHeader("Content-Length", String(buffer.length));
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.send(buffer);
+}
+
+router.get("/:id", sendMediaAsset);
+router.get("/:id/:filename", sendMediaAsset);
 
 export default router;
