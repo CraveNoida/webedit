@@ -131,7 +131,7 @@ function applyEditableLogoText(html: string, data: ProjectData): string {
 
   const style = `<style id="wj-logo-text-style">
 .wj-logo-text {
-  display: inline-flex !important;
+  display: inline-flex;
   align-items: center;
   width: auto !important;
   max-width: min(260px, 52vw) !important;
@@ -146,8 +146,12 @@ function applyEditableLogoText(html: string, data: ProjectData): string {
 .wj-logo-text-dark { color: #ffffff; text-shadow: 0 1px 8px rgba(0,0,0,.25); }
 .nav-logo .wj-logo-text-light,
 .wj-logo-text-light { color: #111827; text-shadow: none; }
-#main-nav.scrolled .wj-logo-text-dark { display: none !important; }
-#main-nav.scrolled .wj-logo-text-light { display: inline-flex !important; }
+.nav-logo .nav-logo-light.wj-logo-text,
+.nav-logo .logo-light.wj-logo-text { display: none !important; }
+#main-nav.scrolled .nav-logo-dark.wj-logo-text,
+#main-nav.scrolled .logo-dark.wj-logo-text { display: none !important; }
+#main-nav.scrolled .nav-logo-light.wj-logo-text,
+#main-nav.scrolled .logo-light.wj-logo-text { display: inline-flex !important; }
 @media (max-width: 640px) { .wj-logo-text { font-size: 1.15rem; max-width: 180px !important; } }
 </style>`;
 
