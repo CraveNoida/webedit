@@ -188,8 +188,15 @@ export default function ProjectWorkspace() {
 
   const updateMutation = useUpdateProject({
     mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(Number(id)) });
+      onSuccess: (updated) => {
+        queryClient.setQueryData(getGetProjectQueryKey(Number(id)), (current: typeof project | undefined) => {
+          if (!current) return updated;
+          return {
+            ...current,
+            ...updated,
+            generatedHtml: updated.generatedHtml ?? current.generatedHtml,
+          };
+        });
         toast({ title: "Project saved" });
       },
       onError: () => toast({ title: "Failed to save", variant: "destructive" }),
@@ -246,8 +253,12 @@ export default function ProjectWorkspace() {
   }
 
   async function handleGenerate() {
-    await handleSave();
-    generateMutation.mutate({ id: Number(id) });
+    try {
+      await handleSave();
+      generateMutation.mutate({ id: Number(id) });
+    } catch {
+      // The save mutation already shows the error toast.
+    }
   }
 
   async function handleDownloadZip() {
@@ -668,8 +679,8 @@ export default function ProjectWorkspace() {
                       ? "Click Regenerate to generate the website preview from your template."
                       : "Select a template first, then click Regenerate to generate the preview."}
                   </p>
-                  <Button onClick={handleGenerate} disabled={!project.templateId || generateMutation.isPending} className="gap-2" data-testid="button-generate-from-empty">
-                    {generateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  <Button onClick={handleGenerate} disabled={!project.templateId || generateMutation.isPending || updateMutation.isPending} className="gap-2" data-testid="button-generate-from-empty">
+                    {generateMutation.isPending || updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                     Generate Preview
                   </Button>
                 </div>

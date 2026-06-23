@@ -635,6 +635,12 @@ router.put("/:id", async (req, res): Promise<void> => {
     }
   }
 
+  const didExplicitlyUpdateGeneratedHtml = body.data.generatedHtml !== undefined;
+  const didUpdateDetails = Object.keys(updateData).some((field) => field !== "generatedHtml" && field !== "status");
+  if (didUpdateDetails && !didExplicitlyUpdateGeneratedHtml && body.data.status === undefined) {
+    updateData.status = "draft";
+  }
+
   const [project] = await db
     .update(projectsTable)
     .set(updateData)
@@ -646,20 +652,9 @@ router.put("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const didExplicitlyUpdateGeneratedHtml = body.data.generatedHtml !== undefined;
-  const didUpdateDetails = Object.keys(updateData).some((field) => field !== "generatedHtml" && field !== "status");
-
-  if (didUpdateDetails && !didExplicitlyUpdateGeneratedHtml && project.templateId) {
-    const generatedHtml = await generatePreparedHtmlForProject(project);
-    if (generatedHtml) {
-      const [regenerated] = await db
-        .update(projectsTable)
-        .set({ generatedHtml, status: "generated" })
-        .where(eq(projectsTable.id, project.id))
-        .returning();
-      res.json(regenerated);
-      return;
-    }
+  if (!didExplicitlyUpdateGeneratedHtml) {
+    res.json({ ...project, generatedHtml: null });
+    return;
   }
 
   res.json(project);
