@@ -66,13 +66,15 @@ async function uploadImageFile(file: File, toast: ReturnType<typeof useToast>["t
 
 // ── HTML merging ──────────────────────────────────────────────────────────────
 // Uses index.html (or first HTML) as the primary structure.
-// Other HTML files are left out so multi-page template folders do not become
-// one repeating single-page preview.
+// Other HTML files are stored as linked internal pages instead of being dumped
+// into one repeating single-page preview.
 
-function mergeHtmlFiles(files: { name: string; content: string }[]): string {
-  if (files.length === 0) return "";
+type HtmlContent = { name: string; relPath: string; content: string };
+
+function getPrimaryHtmlFile(files: HtmlContent[]): HtmlContent | null {
+  if (files.length === 0) return null;
   const index = files.find((file) => file.name.toLowerCase() === "index.html");
-  return (index ?? files[0]).content;
+  return index ?? files[0];
 }
 
 // ── Reference replacement ─────────────────────────────────────────────────────
@@ -327,6 +329,103 @@ function stripLocalRefs(html: string): string {
 
 // ── Core processing ───────────────────────────────────────────────────────────
 
+function extractBodyContent(html: string): string {
+  const bodyMatch = html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i);
+  return bodyMatch ? bodyMatch[1] : html;
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+function normalizePageKey(value: string): string {
+  const withoutSuffix = value.split("#")[0].split("?")[0];
+  const decoded = safeDecode(withoutSuffix)
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "")
+    .replace(/^\/+/, "")
+    .toLowerCase();
+  return decoded || "index.html";
+}
+
+function pageAliases(page: HtmlContent): string[] {
+  const normalized = page.relPath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const filename = normalized.split("/").pop() ?? page.name;
+  const aliases = new Set([
+    normalizePageKey(normalized),
+    normalizePageKey(filename),
+    normalizePageKey(page.name),
+    normalizePageKey(`./${normalized}`),
+    normalizePageKey(`/${normalized}`),
+  ]);
+  return [...aliases].filter(Boolean);
+}
+
+function appendHtmlPages(primaryHtml: string, pages: HtmlContent[], primary: HtmlContent): string {
+  if (pages.length <= 1) return primaryHtml;
+
+  const pageTemplates = pages
+    .map((page) => {
+      const aliases = pageAliases(page).join("|");
+      return `<template data-wj-page="${escapeHtmlAttr(aliases)}">\n${extractBodyContent(page.content)}\n</template>`;
+    })
+    .join("\n");
+
+  const routerScript = `<script id="wj-multipage-router">
+(function(){
+  if (window.__wjMultipageRouter) return;
+  window.__wjMultipageRouter = true;
+  var pages = {};
+  function norm(value) {
+    if (!value) return "index.html";
+    if (/^(mailto|tel|sms|whatsapp|javascript):/i.test(value)) return "";
+    if (/^(https?:)?\\/\\//i.test(value)) return "";
+    var clean = String(value).split("#")[0].split("?")[0];
+    try { clean = decodeURI(clean); } catch (e) {}
+    clean = clean.replace(/\\\\/g, "/").replace(/^\\.\\//, "").replace(/^\\/+/, "").toLowerCase();
+    return clean || "index.html";
+  }
+  document.querySelectorAll("template[data-wj-page]").forEach(function(tpl) {
+    tpl.getAttribute("data-wj-page").split("|").forEach(function(key) {
+      pages[norm(key)] = tpl.innerHTML;
+    });
+  });
+  function render(value, push) {
+    var key = norm(value);
+    var html = pages[key] || pages[key.split("/").pop()];
+    if (!html) return false;
+    document.body.innerHTML = html;
+    window.scrollTo(0, 0);
+    if (push) history.pushState({ wjPage: key }, "", "#" + key);
+    return true;
+  }
+  document.addEventListener("click", function(event) {
+    var target = event.target;
+    var link = target && target.closest ? target.closest("a[href]") : null;
+    if (!link || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.target && link.target !== "_self") return;
+    if (link.hasAttribute("download")) return;
+    var href = link.getAttribute("href");
+    if (!href || href.charAt(0) === "#") return;
+    if (render(href, true)) event.preventDefault();
+  });
+  window.addEventListener("popstate", function() {
+    var page = location.hash ? location.hash.slice(1) : "${escapeHtmlAttr(normalizePageKey(primary.relPath || primary.name))}";
+    render(page, false);
+  });
+  if (location.hash.length > 1) render(location.hash.slice(1), false);
+})();
+</script>`;
+
+  const payload = `${pageTemplates}\n${routerScript}`;
+  return primaryHtml.includes("</body>")
+    ? primaryHtml.replace("</body>", `${payload}\n</body>`)
+    : `${primaryHtml}\n${payload}`;
+}
+
 type TextRec = { name: string; relPath: string; getText: () => Promise<string> };
 type ImageRec = { relPath: string; file: File };
 
@@ -359,18 +458,18 @@ async function processFiles(
 
   // 2. Read all HTML files sequentially (preserve order)
   setMsg(`Reading ${htmlRecs.length} HTML file(s)…`);
-  const htmlContents: { name: string; content: string }[] = [];
+  const htmlContents: HtmlContent[] = [];
   for (const r of htmlRecs) {
-    htmlContents.push({ name: r.name, content: await r.getText() });
+    htmlContents.push({ name: r.name, relPath: r.relPath, content: await r.getText() });
   }
-  const mergedHtml = mergeHtmlFiles(htmlContents);
+  const primaryHtml = getPrimaryHtmlFile(htmlContents);
   const mergedHtmlFiles = htmlRecs.map((r) => r.name);
-  if (htmlRecs.length > 0) {
-    const primaryName = htmlContents.find((file) => file.name.toLowerCase() === "index.html")?.name ?? htmlContents[0].name;
+  if (htmlRecs.length > 0 && primaryHtml) {
+    const primaryName = primaryHtml.name;
     const ignoredCount = Math.max(0, htmlRecs.length - 1);
     summary.push(
       ignoredCount > 0
-        ? `HTML: ${primaryName} used, ${ignoredCount} extra page(s) ignored`
+        ? `HTML: ${primaryName} used, ${ignoredCount} extra page(s) linked`
         : `HTML: ${primaryName}`
     );
   }
@@ -399,7 +498,14 @@ async function processFiles(
 
   // 5. Replace image refs in HTML and CSS, strip local <link>/<script src>
   if (embeddedCount > 0) setMsg("Replacing image references…");
-  const html = stripLocalRefs(promoteLazyImages(replaceRemainingUploadRefs(replaceRefs(mergedHtml, imageMap), embeddedUrls)));
+  const processedPages = htmlContents.map((page) => ({
+    ...page,
+    content: stripLocalRefs(promoteLazyImages(replaceRemainingUploadRefs(replaceRefs(page.content, imageMap), embeddedUrls))),
+  }));
+  const processedPrimary = primaryHtml
+    ? processedPages.find((page) => page.relPath === primaryHtml.relPath) ?? processedPages[0]
+    : null;
+  const html = processedPrimary ? appendHtmlPages(processedPrimary.content, processedPages, processedPrimary) : "";
   const processedCss = replaceRemainingUploadRefs(replaceRefs(css, imageMap), embeddedUrls);
   if (embeddedCount > 0) summary.push("Image references updated in HTML/CSS");
   const remainingUploadRefs = (html.match(/\/?api\/uploads\//gi)?.length ?? 0) + (processedCss.match(/\/?api\/uploads\//gi)?.length ?? 0);
