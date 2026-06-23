@@ -68,6 +68,94 @@ function formatCssUrl(value: string): string {
   return `url('${value.replace(/\r?\n/g, "").replace(/\\/g, "\\\\").replace(/'/g, "%27")}')`;
 }
 
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function setDoubleQuotedAttr(tag: string, attr: string, value: string): string {
+  const name = escapeRegExp(attr);
+  if (hasAttr(tag, attr)) {
+    let replaced = false;
+    const next = tag.replace(new RegExp(`(\\s)${name}\\s*=\\s*(["']).*?\\2`, "i"), (_match, prefix: string) => {
+      replaced = true;
+      return `${prefix}${attr}="${escapeDoubleQuotedAttr(value)}"`;
+    });
+    if (replaced) return next;
+    return tag.replace(new RegExp(`(\\s)${name}\\s*=\\s*[^\\s>]+`, "i"), `$1${attr}="${escapeDoubleQuotedAttr(value)}"`);
+  }
+  return appendDoubleQuotedAttr(tag, attr, value);
+}
+
+function looksLikeLogoImage(tag: string): boolean {
+  const haystack = [
+    getAttr(tag, "class"),
+    getAttr(tag, "id"),
+    getAttr(tag, "alt"),
+    getAttr(tag, "src"),
+    getAttr(tag, "data-src"),
+  ].filter(Boolean).join(" ");
+
+  return /\b(?:logo|brand|navbar-brand|nav-logo)\b/i.test(haystack);
+}
+
+function textLogoFromImage(tag: string, businessName: string): string {
+  const existingClass = getAttr(tag, "class") ?? "";
+  const className = [existingClass, "wj-logo-text"].filter(Boolean).join(" ").trim();
+  const roleClass = /\b(?:nav-logo-light|logo-light)\b/i.test(existingClass)
+    ? " wj-logo-text-light"
+    : /\b(?:nav-logo-dark|logo-dark)\b/i.test(existingClass)
+      ? " wj-logo-text-dark"
+      : "";
+  return `<span class="${escapeDoubleQuotedAttr(`${className}${roleClass}`.trim())}" data-wj-logo-text>${escapeHtmlText(businessName)}</span>`;
+}
+
+function applyEditableLogoText(html: string, data: ProjectData): string {
+  const businessName = getProjectValue(data, "businessName");
+  const logoUrl = getProjectValue(data, "logoUrl");
+  if (!businessName && !logoUrl) return html;
+
+  let usedTextLogo = false;
+  const out = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (!looksLikeLogoImage(tag)) return tag;
+    if (logoUrl) {
+      return setDoubleQuotedAttr(setDoubleQuotedAttr(tag, "src", logoUrl), "alt", businessName);
+    }
+    usedTextLogo = true;
+    return textLogoFromImage(tag, businessName);
+  });
+
+  if (!usedTextLogo) return out;
+
+  const style = `<style id="wj-logo-text-style">
+.wj-logo-text {
+  display: inline-flex !important;
+  align-items: center;
+  width: auto !important;
+  max-width: min(260px, 52vw) !important;
+  height: auto !important;
+  object-fit: unset !important;
+  font: 800 1.45rem/1.05 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0 !important;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.nav-logo .wj-logo-text-dark,
+.wj-logo-text-dark { color: #ffffff; text-shadow: 0 1px 8px rgba(0,0,0,.25); }
+.nav-logo .wj-logo-text-light,
+.wj-logo-text-light { color: #111827; text-shadow: none; }
+#main-nav.scrolled .wj-logo-text-dark { display: none !important; }
+#main-nav.scrolled .wj-logo-text-light { display: inline-flex !important; }
+@media (max-width: 640px) { .wj-logo-text { font-size: 1.15rem; max-width: 180px !important; } }
+</style>`;
+
+  return out.includes("</head>")
+    ? out.replace("</head>", `${style}\n</head>`)
+    : `${style}\n${out}`;
+}
+
 function promoteRenderableImages(html: string): string {
   const lazyAttrs = ["data-src", "data-lazy-src", "data-original", "data-image"];
   const bgAttrs = ["data-bg", "data-background", "data-bg-src"];
@@ -493,6 +581,8 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
   for (const [key, value] of Object.entries(placeholders)) {
     html = html.replaceAll(key, value);
   }
+
+  html = applyEditableLogoText(html, data);
 
   return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
 }
