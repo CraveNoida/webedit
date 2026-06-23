@@ -3,7 +3,8 @@ import crypto from "crypto";
 import path from "path";
 import { db, mediaAssetsTable } from "@workspace/db";
 
-const DATA_IMAGE_RE = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)(?![a-z0-9+/=])/gi;
+const DATA_IMAGE_BASE64_RE = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)(?![a-z0-9+/=])/gi;
+const DATA_IMAGE_TEXT_RE = /data:(image\/[a-z0-9.+-]+)((?:;charset=[^;,]+|;utf-?8)*),([^"'\s>)]+)/gi;
 
 function extensionForMimeType(mimeType: string): string {
   if (mimeType === "image/svg+xml") return ".svg";
@@ -57,18 +58,33 @@ export async function persistDataImageUrls(value: string, req: Request): Promise
   if (!value.includes("data:image")) return value;
 
   const replacements = new Map<string, string>();
-  const matches = [...value.matchAll(DATA_IMAGE_RE)];
+  const matches = [
+    ...[...value.matchAll(DATA_IMAGE_BASE64_RE)].map((match) => ({
+      dataUrl: match[0],
+      mimeType: match[1].toLowerCase(),
+      buffer: Buffer.from(match[2].replace(/\s+/g, ""), "base64"),
+    })),
+    ...[...value.matchAll(DATA_IMAGE_TEXT_RE)]
+      .filter((match) => !match[2].toLowerCase().includes("base64"))
+      .map((match) => {
+        const payload = match[3];
+        const decoded = payload.includes("%") ? decodeURIComponent(payload) : payload;
+        return {
+          dataUrl: match[0],
+          mimeType: match[1].toLowerCase(),
+          buffer: Buffer.from(decoded, "utf8"),
+        };
+      }),
+  ];
 
   for (const match of matches) {
-    const dataUrl = match[0];
+    const dataUrl = match.dataUrl;
     if (replacements.has(dataUrl)) continue;
 
-    const mimeType = match[1].toLowerCase();
-    const base64 = match[2].replace(/\s+/g, "");
-    const buffer = Buffer.from(base64, "base64");
-    const hash = crypto.createHash("sha1").update(buffer).digest("hex").slice(0, 12);
+    const hash = crypto.createHash("sha1").update(match.buffer).digest("hex").slice(0, 12);
+    const mimeType = match.mimeType;
     const filename = `embedded-${hash}${extensionForMimeType(mimeType)}`;
-    const asset = await createMediaAsset({ filename, mimeType, buffer });
+    const asset = await createMediaAsset({ filename, mimeType, buffer: match.buffer });
     replacements.set(dataUrl, publicMediaAssetUrl(req, asset.id, asset.filename));
   }
 
