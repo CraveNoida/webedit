@@ -107,12 +107,17 @@ router.put("/:id", async (req, res): Promise<void> => {
   const updateData: Record<string, unknown> = {};
   if (body.data.name !== undefined) updateData.name = body.data.name;
   if (body.data.category !== undefined) updateData.category = body.data.category;
-  if (body.data.description !== undefined) updateData.description = body.data.description;
-  if (body.data.htmlContent !== undefined) updateData.htmlContent = body.data.htmlContent;
-  if (body.data.cssContent !== undefined) updateData.cssContent = body.data.cssContent;
-  if (body.data.jsContent !== undefined) updateData.jsContent = body.data.jsContent;
+  if (body.data.description !== undefined) updateData.description = cleanText(body.data.description) ?? null;
+  if (body.data.htmlContent !== undefined) {
+    const htmlContent = cleanText(body.data.htmlContent) ?? "";
+    const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
+    updateData.htmlContent = injectedHtml;
+    updateData.placeholders = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
+  }
+  if (body.data.cssContent !== undefined) updateData.cssContent = cleanText(body.data.cssContent) ?? null;
+  if (body.data.jsContent !== undefined) updateData.jsContent = cleanText(body.data.jsContent) ?? null;
   if (body.data.thumbnailUrl !== undefined) updateData.thumbnailUrl = body.data.thumbnailUrl;
-  if (body.data.placeholders !== undefined) updateData.placeholders = body.data.placeholders;
+  if (body.data.placeholders !== undefined && body.data.htmlContent === undefined) updateData.placeholders = body.data.placeholders;
 
   const [template] = await db
     .update(templatesTable)

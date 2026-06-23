@@ -170,9 +170,6 @@ function replaceSrcset(value: string, map: Map<string, string>): string {
 
 function replaceRefs(content: string, map: Map<string, string>): string {
   const attrs = [
-    "src",
-    "href",
-    "poster",
     "data-src",
     "data-bg",
     "data-background",
@@ -180,23 +177,26 @@ function replaceRefs(content: string, map: Map<string, string>): string {
     "data-lazy-src",
     "data-original",
     "data-image",
-    "srcset",
     "data-srcset",
+    "srcset",
+    "poster",
+    "href",
+    "src",
   ].join("|");
 
   return content
     .replace(
-      new RegExp(`\\b(${attrs})\\s*=\\s*(["'])(.*?)\\2`, "gi"),
-      (match, attr: string, quote: string, value: string) => {
+      new RegExp(`(^|\\s)(${attrs})\\s*=\\s*(["'])(.*?)\\3`, "gi"),
+      (match, prefix: string, attr: string, quote: string, value: string) => {
         const replaced = /srcset$/i.test(attr) ? replaceSrcset(value, map) : replaceMappedUrl(value, map);
-        return `${attr}=${quote}${replaced}${quote}`;
+        return `${prefix}${attr}=${quote}${replaced}${quote}`;
       }
     )
     .replace(
-      new RegExp(`\\b(${attrs})\\s*=\\s*([^"'\\s>]+)`, "gi"),
-      (match, attr: string, value: string) => {
+      new RegExp(`(^|\\s)(${attrs})\\s*=\\s*([^"'\\s>]+)`, "gi"),
+      (match, prefix: string, attr: string, value: string) => {
         const replaced = /srcset$/i.test(attr) ? replaceSrcset(value, map) : replaceMappedUrl(value, map);
-        return `${attr}="${replaced}"`;
+        return `${prefix}${attr}="${replaced}"`;
       }
     )
     .replace(/url\(\s*(["']?)(.*?)\1\s*\)/gi, (match, quote: string, value: string) => {
@@ -206,14 +206,15 @@ function replaceRefs(content: string, map: Map<string, string>): string {
 }
 
 function hasAttr(tag: string, attr: string): boolean {
-  return new RegExp(`\\b${attr}\\s*=`, "i").test(tag);
+  return new RegExp(`(?:^|\\s)${escapeRegExp(attr)}\\s*=`, "i").test(tag);
 }
 
 function getAttr(tag: string, attr: string): string | null {
-  const quoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+  const name = escapeRegExp(attr);
+  const quoted = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])(.*?)\\1`, "i"));
   if (quoted) return quoted[2];
 
-  const unquoted = tag.match(new RegExp(`\\b${attr}\\s*=\\s*([^\\s>]+)`, "i"));
+  const unquoted = tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*([^\\s>]+)`, "i"));
   return unquoted?.[1] ?? null;
 }
 
@@ -224,6 +225,27 @@ function removeAttrs(tag: string, attrs: string[]): string {
     out = out.replace(new RegExp(`\\s+${attr}\\s*=\\s*[^\\s>]+`, "gi"), "");
   }
   return out;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeDoubleQuotedAttr(value: string): string {
+  return value
+    .replace(/&(?!(?:[a-z][a-z0-9]+|#\d+|#x[\da-f]+);)/gi, "&amp;")
+    .replace(/"/g, "&quot;");
+}
+
+function appendDoubleQuotedAttr(tag: string, attr: string, value: string): string {
+  return tag.replace(/\s*\/?>$/, (ending) => {
+    const close = ending.trim() === "/>" ? " />" : ">";
+    return ` ${attr}="${escapeDoubleQuotedAttr(value)}"${close}`;
+  });
+}
+
+function formatCssUrl(value: string): string {
+  return `url('${value.replace(/\r?\n/g, "").replace(/\\/g, "\\\\").replace(/'/g, "%27")}')`;
 }
 
 function promoteLazyImages(html: string): string {
@@ -237,10 +259,10 @@ function promoteLazyImages(html: string): string {
 
       if (lazyValue) {
         if (hasAttr(out, "src")) {
-          out = out.replace(/\bsrc\s*=\s*(["']).*?\1/i, `src="${lazyValue}"`);
-          out = out.replace(/\bsrc\s*=\s*[^\s>]+/i, `src="${lazyValue}"`);
+          out = out.replace(/(\s)src\s*=\s*(["']).*?\2/i, `$1src="${escapeDoubleQuotedAttr(lazyValue)}"`);
+          out = out.replace(/(\s)src\s*=\s*[^\s>]+/i, `$1src="${escapeDoubleQuotedAttr(lazyValue)}"`);
         } else {
-          out = out.replace(/>$/, ` src="${lazyValue}">`);
+          out = appendDoubleQuotedAttr(out, "src", lazyValue);
         }
       }
 
@@ -260,15 +282,20 @@ function promoteLazyImages(html: string): string {
       if (!bgValue || /<img\b/i.test(tag)) return tag;
 
       const style = getAttr(tag, "style");
+      const backgroundImage = `background-image: ${formatCssUrl(bgValue)};`;
+      const cleanedStyle = style
+        ?.replace(/background(?:-image)?\s*:\s*url\([^)]*\)\s*;?/i, "")
+        .trim()
+        .replace(/;$/, "");
       const nextStyle = style
-        ? style.replace(/background(?:-image)?\s*:\s*url\([^)]*\)\s*;?/i, "") + `; background-image: url("${bgValue}");`
-        : `background-image: url("${bgValue}");`;
+        ? [cleanedStyle, backgroundImage].filter(Boolean).join("; ")
+        : backgroundImage;
 
       if (hasAttr(tag, "style")) {
-        return tag.replace(/\bstyle\s*=\s*(["']).*?\1/i, `style="${nextStyle}"`);
+        return tag.replace(/(\s)style\s*=\s*(["']).*?\2/i, `$1style="${escapeDoubleQuotedAttr(nextStyle)}"`);
       }
 
-      return tag.replace(/>$/, ` style="${nextStyle}">`);
+      return appendDoubleQuotedAttr(tag, "style", nextStyle);
     });
 }
 
