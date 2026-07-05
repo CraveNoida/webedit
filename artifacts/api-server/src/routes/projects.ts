@@ -20,6 +20,14 @@ import {
 const router = Router();
 const DEFAULT_HERO_IMAGE_URL =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E";
+const DEFAULT_PAYING_GUEST_IMAGE_URLS = [
+  "https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&q=80&w=1400",
+  "https://images.unsplash.com/photo-1560448204-603b3fc33ddc?auto=format&fit=crop&q=80&w=1200",
+  "https://images.unsplash.com/photo-1560448075-bb485b067938?auto=format&fit=crop&q=80&w=1200",
+  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=1200",
+  "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&q=80&w=1200",
+  "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&q=80&w=1200",
+];
 
 function stripImportedExtraPages(html: string): string {
   return html.replace(/[\r\n]*\s*<!--\s*═══[\s\S]*?(?=<\/body>)/i, "\n");
@@ -474,6 +482,14 @@ function looksLikePayingGuestTemplate(template: ProjectTemplate): boolean {
   return /paying\s+guest|\bpg\s+accommodation\b|room-card|amenities-grid|WHATSAPP_NUMBER/i.test(haystack);
 }
 
+function hasCompletePayingGuestHtml(html: string): boolean {
+  return /class=["'][^"']*\bgallery\b/i.test(html)
+    && /class=["'][^"']*\bpricing\b/i.test(html)
+    && /class=["'][^"']*\blocation\b/i.test(html)
+    && /class=["'][^"']*\bfaq\b/i.test(html)
+    && /class=["'][^"']*\btestimonials\b/i.test(html);
+}
+
 function buildPayingGuestFallbackHtml(): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -541,7 +557,10 @@ function buildPayingGuestFallbackHtml(): string {
 
     <section class="about section">
       <div class="container about-grid">
-        <div class="about-img-wrap"><img src="{{heroImageUrl}}" alt="{{businessName}} accommodation"></div>
+        <div class="about-img-wrap">
+          <img src="{{galleryImage1}}" alt="{{businessName}} accommodation">
+          <div class="about-stat-float"><span class="num">4.8</span><span class="lbl">Resident rating</span></div>
+        </div>
         <div class="about-content">
           <span class="section-label">About Us</span>
           <h2>Comfortable paying guest accommodation made simple.</h2>
@@ -574,15 +593,15 @@ function buildPayingGuestFallbackHtml(): string {
         </div>
         <div class="rooms-grid">
           <article class="room-card">
-            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Single room"><span class="room-avail open">Available</span></div>
+            <div class="room-card-img"><img src="{{galleryImage2}}" alt="Single room"><span class="room-avail open">Available</span></div>
             <div class="room-card-body"><h3>Single Sharing</h3><div class="room-price"><span class="amt">Contact</span> <span class="per">for rent</span></div><div class="room-feats"><span class="room-feat">✓ Bed and storage</span><span class="room-feat">✓ Meals optional</span><span class="room-feat">✓ Wi-Fi</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
           </article>
           <article class="room-card">
-            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Double sharing room"><span class="room-avail open">Available</span></div>
+            <div class="room-card-img"><img src="{{galleryImage3}}" alt="Double sharing room"><span class="room-avail open">Available</span></div>
             <div class="room-card-body"><h3>Double Sharing</h3><div class="room-price"><span class="amt">Contact</span> <span class="per">for rent</span></div><div class="room-feats"><span class="room-feat">✓ Spacious setup</span><span class="room-feat">✓ Study-friendly</span><span class="room-feat">✓ Secure stay</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
           </article>
           <article class="room-card">
-            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Triple sharing room"><span class="room-avail few">Few Left</span></div>
+            <div class="room-card-img"><img src="{{galleryImage4}}" alt="Triple sharing room"><span class="room-avail few">Few Left</span></div>
             <div class="room-card-body"><h3>Triple Sharing</h3><div class="room-price"><span class="amt">Budget</span> <span class="per">friendly</span></div><div class="room-feats"><span class="room-feat">✓ Affordable rent</span><span class="room-feat">✓ Shared amenities</span><span class="room-feat">✓ Easy access</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
           </article>
         </div>
@@ -604,11 +623,62 @@ function buildPayingGuestFallbackHtml(): string {
 
     <section class="food section" id="food">
       <div class="container food-layout">
-        <div class="food-img-wrap"><img src="{{heroImageUrl}}" alt="Homely food"></div>
-        <div>
+        <div class="food-img-wrap"><img src="{{galleryImage5}}" alt="Homely food"></div>
+        <div class="food-content">
           <span class="section-label">Food</span>
           <h2 class="section-title">Homely Meals Available</h2>
           <p class="section-desc">Fresh, simple meals and a calm living environment for a comfortable stay.</p>
+          <div class="meals-grid">
+            <div class="meal-card"><div class="meal-card-top"><span class="meal-emoji">☕</span><span class="meal-time">Breakfast</span></div><p>Tea, paratha, poha and seasonal options.</p></div>
+            <div class="meal-card"><div class="meal-card-top"><span class="meal-emoji">🍛</span><span class="meal-time">Lunch</span></div><p>Dal, rice, roti, sabzi and salad.</p></div>
+            <div class="meal-card"><div class="meal-card-top"><span class="meal-emoji">🥘</span><span class="meal-time">Dinner</span></div><p>Balanced home-style dinner served daily.</p></div>
+          </div>
+          <div class="food-specials">
+            <h4>Food highlights</h4>
+            <div class="food-tags"><span class="food-tag">Freshly cooked</span><span class="food-tag">Veg options</span><span class="food-tag">Hygienic kitchen</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="gallery section" id="gallery">
+      <div class="container">
+        <div class="section-header"><span class="section-label">Gallery</span><h2 class="section-title">See the Stay</h2><p class="section-desc">Rooms, common spaces and daily facilities from the property.</p></div>
+        <div class="gallery-masonry">
+          <div class="gallery-item"><img src="{{galleryImage1}}" alt="PG room"><span class="gallery-label">Rooms</span></div>
+          <div class="gallery-item"><img src="{{galleryImage2}}" alt="Study space"><span class="gallery-label">Study Space</span></div>
+          <div class="gallery-item"><img src="{{galleryImage3}}" alt="Beds and storage"><span class="gallery-label">Storage</span></div>
+          <div class="gallery-item"><img src="{{galleryImage4}}" alt="Common area"><span class="gallery-label">Common Area</span></div>
+          <div class="gallery-item"><img src="{{galleryImage5}}" alt="Food service"><span class="gallery-label">Food</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pricing section" id="pricing">
+      <div class="container">
+        <div class="section-header"><span class="section-label">Pricing</span><h2 class="section-title">Transparent Rent Options</h2><p class="section-desc">Share your requirement and get current room availability with rent details.</p></div>
+        <div class="pricing-grid">
+          <article class="price-card"><div class="price-card-head"><h3>Single Room</h3><p>Private comfort</p></div><div class="price-amt"><span class="rupee">Rs.</span><span class="val">Contact</span><span class="mo">/month</span></div><div class="price-deposit">Deposit as per property policy</div><div class="price-features"><span class="price-feat"><span class="check">✓</span> Private bed</span><span class="price-feat"><span class="check">✓</span> Storage</span><span class="price-feat"><span class="check">✓</span> Wi-Fi</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Ask Availability</a></article>
+          <article class="price-card featured"><span class="price-badge">Popular</span><div class="price-card-head"><h3>Double Sharing</h3><p>Comfort and value</p></div><div class="price-amt"><span class="rupee">Rs.</span><span class="val">Contact</span><span class="mo">/month</span></div><div class="price-deposit">Meals optional</div><div class="price-features"><span class="price-feat"><span class="check">✓</span> Shared room</span><span class="price-feat"><span class="check">✓</span> Study-friendly</span><span class="price-feat"><span class="check">✓</span> Secure stay</span></div><a class="btn btn-accent" href="{{phoneLink}}">Call Now</a></article>
+          <article class="price-card"><div class="price-card-head"><h3>Triple Sharing</h3><p>Budget friendly</p></div><div class="price-amt"><span class="rupee">Rs.</span><span class="val">Budget</span><span class="mo">/month</span></div><div class="price-deposit">Subject to availability</div><div class="price-features"><span class="price-feat"><span class="check">✓</span> Affordable rent</span><span class="price-feat"><span class="check">✓</span> Shared amenities</span><span class="price-feat"><span class="check">✓</span> Easy access</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></article>
+        </div>
+        <p class="pricing-disclaimer">Final rent depends on room type, facilities and current availability.</p>
+      </div>
+    </section>
+
+    <section class="location section" id="location">
+      <div class="container location-grid">
+        <div class="location-info">
+          <span class="section-label">Location</span>
+          <h2 class="section-title">Prime Area, Easy Access</h2>
+          <div class="addr-block"><span class="addr-icon">⌂</span><p>{{address}}</p></div>
+          <div class="landmarks">
+            <h4>Nearby conveniences</h4>
+            <div class="landmark-list"><span class="landmark"><span class="lm-icon">✓</span> Market nearby</span><span class="landmark"><span class="lm-icon">✓</span> Public transport</span><span class="landmark"><span class="lm-icon">✓</span> Safe surroundings</span></div>
+          </div>
+        </div>
+        <div class="map-wrap">
+          <a class="map-placeholder" href="{{googleMapsLink}}" target="_blank" rel="noopener"><span class="mp-icon">⌖</span><strong>Open Map Location</strong><small>{{address}}</small></a>
         </div>
       </div>
     </section>
@@ -620,6 +690,28 @@ function buildPayingGuestFallbackHtml(): string {
           <div class="rule-card"><div class="rule-icon">🪪</div><div class="rule-body"><h4>ID Required</h4><p>Valid ID and basic verification for every resident.</p></div></div>
           <div class="rule-card"><div class="rule-icon">🕘</div><div class="rule-body"><h4>Visitor Timing</h4><p>Visitor rules keep the property peaceful and safe.</p></div></div>
           <div class="rule-card"><div class="rule-icon">🤝</div><div class="rule-body"><h4>Respectful Stay</h4><p>Clean, cooperative shared-living environment.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="testimonials section" id="testimonials">
+      <div class="container">
+        <div class="section-header"><span class="section-label">Reviews</span><h2 class="section-title">What Residents Say</h2><p class="section-desc">A clean and peaceful stay for students and working professionals.</p></div>
+        <div class="testimonials-grid">
+          <article class="review-card"><div class="review-stars">★★★★★</div><p class="review-text">Rooms are clean and the location is convenient for daily travel.</p><div class="review-author"><span class="review-avatar">A</span><span><strong class="review-name">Amit</strong><small class="review-role">Working professional</small></span></div></article>
+          <article class="review-card"><div class="review-stars">★★★★★</div><p class="review-text">Food and Wi-Fi make it easy to focus on studies and work.</p><div class="review-author"><span class="review-avatar">R</span><span><strong class="review-name">Riya</strong><small class="review-role">Student</small></span></div></article>
+          <article class="review-card"><div class="review-stars">★★★★☆</div><p class="review-text">Good support and simple rules. The stay feels managed and safe.</p><div class="review-author"><span class="review-avatar">S</span><span><strong class="review-name">Sameer</strong><small class="review-role">Resident</small></span></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq section" id="faq">
+      <div class="container">
+        <div class="section-header"><span class="section-label">FAQ</span><h2 class="section-title">Common Questions</h2></div>
+        <div class="faq-list">
+          <div class="faq-item"><button class="faq-q" type="button">Is food included?<span class="faq-toggle">+</span></button><div class="faq-a"><div class="faq-a-inner">Food availability depends on the selected room plan. Contact us for current details.</div></div></div>
+          <div class="faq-item"><button class="faq-q" type="button">Can I visit before booking?<span class="faq-toggle">+</span></button><div class="faq-a"><div class="faq-a-inner">Yes, you can book a visit and inspect the room before confirming.</div></div></div>
+          <div class="faq-item"><button class="faq-q" type="button">What documents are required?<span class="faq-toggle">+</span></button><div class="faq-a"><div class="faq-a-inner">A valid ID and basic verification details are required for every resident.</div></div></div>
         </div>
       </div>
     </section>
@@ -770,10 +862,15 @@ function replaceUnresolvedLocalImages(html: string): string {
 }
 
 function generateHtml(template: ProjectTemplate, data: ProjectData): string {
-  let html = hasRenderableHtml(template.htmlContent) || !looksLikePayingGuestTemplate(template)
+  const isPayingGuestTemplate = looksLikePayingGuestTemplate(template);
+  let html = hasRenderableHtml(template.htmlContent)
+    && (!isPayingGuestTemplate || hasCompletePayingGuestHtml(template.htmlContent))
     ? template.htmlContent
     : buildPayingGuestFallbackHtml();
-  const heroImageUrl = getProjectValue(data, "heroImageUrl", DEFAULT_HERO_IMAGE_URL);
+  const projectHeroImageUrl = typeof data.heroImageUrl === "string" ? data.heroImageUrl.trim() : "";
+  const payingGuestDefaultHero = DEFAULT_PAYING_GUEST_IMAGE_URLS[0] ?? DEFAULT_HERO_IMAGE_URL;
+  const heroImageUrl = projectHeroImageUrl
+    || (isPayingGuestTemplate ? payingGuestDefaultHero : DEFAULT_HERO_IMAGE_URL);
 
   // Inject CSS and JS if present
   if (template.cssContent) {
@@ -815,6 +912,16 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
   // Replace gallery images
   const gallery = Array.isArray(data.galleryImages) ? data.galleryImages as string[] : [];
   placeholders["{{galleryImages}}"] = gallery.map((url) => `<img src="${url}" alt="Gallery" />`).join("\n");
+  const defaultGallery = isPayingGuestTemplate ? DEFAULT_PAYING_GUEST_IMAGE_URLS : [heroImageUrl];
+  const galleryWithHero = [
+    heroImageUrl,
+    ...gallery.filter((url) => typeof url === "string" && url.trim()),
+    ...defaultGallery,
+  ];
+  for (let index = 1; index <= 8; index += 1) {
+    const imageUrl = galleryWithHero[index - 1] ?? galleryWithHero[0] ?? DEFAULT_HERO_IMAGE_URL;
+    placeholders[`{{galleryImage${index}}}`] = escapeDoubleQuotedAttr(imageUrl);
+  }
 
   const packages = Array.isArray(data.packages) ? data.packages as Array<Record<string, unknown>> : [];
   placeholders["{{packages}}"] = packages.map((pkg) => {
