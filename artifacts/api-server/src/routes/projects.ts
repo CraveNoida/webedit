@@ -30,7 +30,10 @@ const DEFAULT_PAYING_GUEST_IMAGE_URLS = [
 ];
 
 function stripImportedExtraPages(html: string): string {
-  return html.replace(/[\r\n]*\s*<!--\s*═══[\s\S]*?(?=<\/body>)/i, "\n");
+  return html.replace(
+    /[\r\n]*\s*<!--\s*(?:WEBJAL_EXTRA_PAGE|WJ_EXTRA_PAGE|IMPORTED_EXTRA_PAGE)\b[\s\S]*?-->/gi,
+    "\n",
+  );
 }
 
 function hasAttr(tag: string, attr: string): boolean {
@@ -898,7 +901,9 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
     "{{heroImage}}": heroImageUrl,
     "{{heroImageUrl}}": heroImageUrl,
     "{{whatsappLink}}": `https://wa.me/${getProjectValue(data, "whatsapp").replace(/[^0-9]/g, "")}`,
+    "{{whatsappDigits}}": getProjectValue(data, "whatsapp").replace(/[^0-9]/g, ""),
     "{{phoneLink}}": `tel:${getProjectValue(data, "phone")}`,
+    "{{phoneDigits}}": getProjectValue(data, "phone").replace(/[^0-9]/g, ""),
     "{{emailLink}}": `mailto:${getProjectValue(data, "email")}`,
     "{{seoTitle}}": `${getProjectValue(data, "businessName")} - ${getProjectValue(data, "tagline", "Welcome")}`,
     "{{metaDescription}}": getProjectValue(data, "about", `Welcome to ${getProjectValue(data, "businessName")}`),
