@@ -290,7 +290,7 @@ body {
     '.spinner-wrapper','.pace','.pace-active','.pace-inactive'
   ];
   var SHOW_SELS=[
-    'section','article','header','footer','main','nav',
+    'section','article','header','footer','main',
     '.hero-subtitle','.hero-title','.hero-desc','.hero-btns','.hero-glass-card',
     '.section-header','.section-header *',
     '.service-card','.gallery-item','.about-img','.about-text',
@@ -308,6 +308,13 @@ body {
     var big=rect.width>window.innerWidth*0.35&&rect.height>window.innerHeight*0.25;
     var fixedOrAbsolute=cs.position==='fixed'||cs.position==='absolute'||cs.position==='sticky';
     return fixedOrAbsolute||highLayer||big||text==='loading'||text==='loading...';
+  }
+  function preservesHiddenState(el){
+    var marker=((el.id||'')+' '+(el.className||'')+' '+el.tagName).toLowerCase();
+    if(/(loader|loading|preloader|pre-loader|spinner|splash)/.test(marker)){ return false; }
+    if(/(mobile|menu|nav|drawer|sidebar|offcanvas|off-canvas|modal|popup|sheet|dropdown)/.test(marker)){ return true; }
+    var cs=window.getComputedStyle(el);
+    return (cs.position==='fixed'||cs.position==='absolute'||cs.position==='sticky')&&parseInt(cs.zIndex||'0',10)>10;
   }
   function fix(){
     // Remove loading overlays
@@ -344,6 +351,7 @@ body {
     SHOW_SELS.forEach(function(sel){
       try{
         document.querySelectorAll(sel).forEach(function(el){
+          if(preservesHiddenState(el)){ return; }
           var cs=window.getComputedStyle(el);
           var op=parseFloat(cs.opacity);
           if(op<0.05){ el.style.setProperty('opacity','1','important'); }
