@@ -24,6 +24,34 @@ function serverErrorMessage(error: unknown): string {
   return "Unknown server error";
 }
 
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<head\b[\s\S]*?<\/head>/gi, "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<template\b[\s\S]*?<\/template>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+}
+
+function bodyContent(html: string): string {
+  return html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html;
+}
+
+function hasRenderableHtml(html: string): boolean {
+  const body = bodyContent(html);
+  return /<(?:main|section|article|header|footer|nav|div|p|h[1-6]|img|form|ul|ol|li|a|button)\b/i.test(body)
+    || stripHtmlToText(body).length > 0;
+}
+
+function validateRenderableHtml(html: string): string | null {
+  return hasRenderableHtml(html)
+    ? null
+    : "Template HTML has no visible body content. Import the folder containing the real index.html, or paste the page body before saving.";
+}
+
 router.get("/", async (req, res): Promise<void> => {
   const query = ListTemplatesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -50,6 +78,12 @@ router.post("/", async (req, res): Promise<void> => {
   try {
     // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately.
     const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
+    const htmlError = validateRenderableHtml(htmlContent);
+    if (htmlError) {
+      res.status(400).json({ error: htmlError });
+      return;
+    }
+
     const cssContent = body.data.cssContent !== undefined
       ? await persistDataImageUrls(cleanText(body.data.cssContent) ?? "", req)
       : null;
@@ -117,6 +151,12 @@ router.put("/:id", async (req, res): Promise<void> => {
   if (body.data.description !== undefined) updateData.description = cleanText(body.data.description) ?? null;
   if (body.data.htmlContent !== undefined) {
     const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
+    const htmlError = validateRenderableHtml(htmlContent);
+    if (htmlError) {
+      res.status(400).json({ error: htmlError });
+      return;
+    }
+
     const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
     updateData.htmlContent = injectedHtml;
     updateData.placeholders = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];

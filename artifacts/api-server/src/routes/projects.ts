@@ -380,6 +380,7 @@ body {
 
 type ProjectTemplate = {
   id: number;
+  name?: string;
   htmlContent: string;
   cssContent?: string | null;
   jsContent?: string | null;
@@ -436,6 +437,228 @@ function getProjectValue(data: ProjectData, key: keyof ProjectData, fallback = "
   const value = data[key];
   if (typeof value !== "string") return fallback;
   return value.trim() || fallback;
+}
+
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<head\b[\s\S]*?<\/head>/gi, "")
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<template\b[\s\S]*?<\/template>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .trim();
+}
+
+function bodyContent(html: string): string {
+  return html.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)?.[1] ?? html;
+}
+
+function hasRenderableHtml(html: string): boolean {
+  const body = bodyContent(html);
+  return /<(?:main|section|article|header|footer|nav|div|p|h[1-6]|img|form|ul|ol|li|a|button)\b/i.test(body)
+    || stripHtmlToText(body).length > 0;
+}
+
+function looksLikePayingGuestTemplate(template: ProjectTemplate): boolean {
+  const haystack = `${template.name ?? ""}\n${template.cssContent ?? ""}\n${template.jsContent ?? ""}`;
+  return /paying\s+guest|\bpg\s+accommodation\b|room-card|amenities-grid|WHATSAPP_NUMBER/i.test(haystack);
+}
+
+function buildPayingGuestFallbackHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{seoTitle}}</title>
+  <meta name="description" content="{{metaDescription}}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <a class="logo" href="#home" aria-label="{{businessName}}">
+        <span class="logo-mark">PG</span>
+        <span class="logo-text">{{businessName}}<small>Paying Guest</small></span>
+      </a>
+      <nav class="nav">
+        <a href="#rooms">Rooms</a>
+        <a href="#amenities">Amenities</a>
+        <a href="#food">Food</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <div class="header-right">
+        <a class="header-phone" href="{{phoneLink}}">Call {{phone}}</a>
+        <button class="hamburger" id="hamburger" type="button" aria-label="Open menu"><span></span><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <nav class="mobile-nav" id="mobileNav">
+    <a href="#rooms">Rooms</a>
+    <a href="#amenities">Amenities</a>
+    <a href="#food">Food</a>
+    <a href="#rules">Rules</a>
+    <a href="#contact">Contact</a>
+    <div class="mobile-nav-cta">
+      <a class="btn btn-primary" href="{{phoneLink}}">Call</a>
+      <a class="btn btn-whatsapp" href="{{whatsappLink}}">WhatsApp</a>
+    </div>
+  </nav>
+
+  <main id="home">
+    <section class="hero">
+      <div class="hero-bg"><img src="{{heroImageUrl}}" alt="{{businessName}} rooms"></div>
+      <div class="container">
+        <div class="hero-inner">
+          <div class="hero-price-tag"><span class="dot"></span> Rooms available now</div>
+          <h1 class="hero-title">{{businessName}}</h1>
+          <p class="hero-subtitle">{{tagline}}</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="{{phoneLink}}">Call {{phone}}</a>
+            <a class="btn btn-whatsapp btn-lg" href="{{whatsappLink}}">WhatsApp</a>
+          </div>
+          <div class="hero-trust-row">
+            <span class="trust-badge"><span class="trust-badge-icon">✓</span> Safe stay</span>
+            <span class="trust-badge"><span class="trust-badge-icon">★</span> Homely food</span>
+            <span class="trust-badge"><span class="trust-badge-icon">⌂</span> Prime location</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="about section">
+      <div class="container about-grid">
+        <div class="about-img-wrap"><img src="{{heroImageUrl}}" alt="{{businessName}} accommodation"></div>
+        <div class="about-content">
+          <span class="section-label">About Us</span>
+          <h2>Comfortable paying guest accommodation made simple.</h2>
+          <p>{{about}}</p>
+          <div class="about-checks">
+            <div class="about-check"><span class="tick">✓</span> Furnished rooms</div>
+            <div class="about-check"><span class="tick">✓</span> Wi-Fi available</div>
+            <div class="about-check"><span class="tick">✓</span> Daily meals</div>
+            <div class="about-check"><span class="tick">✓</span> Secure premises</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats-strip">
+      <div class="container stats-strip-grid">
+        <div class="stat-item"><div class="stat-num">24/7</div><div class="stat-lbl">Support</div></div>
+        <div class="stat-item"><div class="stat-num">3+</div><div class="stat-lbl">Room types</div></div>
+        <div class="stat-item"><div class="stat-num">Wi-Fi</div><div class="stat-lbl">Included</div></div>
+        <div class="stat-item"><div class="stat-num">Food</div><div class="stat-lbl">Available</div></div>
+      </div>
+    </section>
+
+    <section class="rooms section" id="rooms">
+      <div class="container">
+        <div class="section-header">
+          <span class="section-label">Rooms</span>
+          <h2 class="section-title">Choose Your Room</h2>
+          <p class="section-desc">Clean, practical rooms for students and working professionals.</p>
+        </div>
+        <div class="rooms-grid">
+          <article class="room-card">
+            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Single room"><span class="room-avail open">Available</span></div>
+            <div class="room-card-body"><h3>Single Sharing</h3><div class="room-price"><span class="amt">Contact</span> <span class="per">for rent</span></div><div class="room-feats"><span class="room-feat">✓ Bed and storage</span><span class="room-feat">✓ Meals optional</span><span class="room-feat">✓ Wi-Fi</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
+          </article>
+          <article class="room-card">
+            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Double sharing room"><span class="room-avail open">Available</span></div>
+            <div class="room-card-body"><h3>Double Sharing</h3><div class="room-price"><span class="amt">Contact</span> <span class="per">for rent</span></div><div class="room-feats"><span class="room-feat">✓ Spacious setup</span><span class="room-feat">✓ Study-friendly</span><span class="room-feat">✓ Secure stay</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
+          </article>
+          <article class="room-card">
+            <div class="room-card-img"><img src="{{heroImageUrl}}" alt="Triple sharing room"><span class="room-avail few">Few Left</span></div>
+            <div class="room-card-body"><h3>Triple Sharing</h3><div class="room-price"><span class="amt">Budget</span> <span class="per">friendly</span></div><div class="room-feats"><span class="room-feat">✓ Affordable rent</span><span class="room-feat">✓ Shared amenities</span><span class="room-feat">✓ Easy access</span></div><a class="btn btn-primary" href="{{whatsappLink}}">Enquire</a></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="amenities section" id="amenities">
+      <div class="container">
+        <div class="section-header"><span class="section-label">Amenities</span><h2 class="section-title">Everything You Need</h2></div>
+        <div class="amenities-grid">
+          <div class="amenity-item"><div class="amenity-icon">📶</div><div class="amenity-name">Wi-Fi</div></div>
+          <div class="amenity-item"><div class="amenity-icon">🍽</div><div class="amenity-name">Meals</div></div>
+          <div class="amenity-item"><div class="amenity-icon">🧺</div><div class="amenity-name">Laundry</div></div>
+          <div class="amenity-item"><div class="amenity-icon">🔒</div><div class="amenity-name">Security</div></div>
+          <div class="amenity-item"><div class="amenity-icon">🧹</div><div class="amenity-name">Housekeeping</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="food section" id="food">
+      <div class="container food-layout">
+        <div class="food-img-wrap"><img src="{{heroImageUrl}}" alt="Homely food"></div>
+        <div>
+          <span class="section-label">Food</span>
+          <h2 class="section-title">Homely Meals Available</h2>
+          <p class="section-desc">Fresh, simple meals and a calm living environment for a comfortable stay.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="rules section" id="rules">
+      <div class="container">
+        <div class="section-header"><span class="section-label">House Rules</span><h2 class="section-title">Simple and Clear</h2></div>
+        <div class="rules-grid">
+          <div class="rule-card"><div class="rule-icon">🪪</div><div class="rule-body"><h4>ID Required</h4><p>Valid ID and basic verification for every resident.</p></div></div>
+          <div class="rule-card"><div class="rule-icon">🕘</div><div class="rule-body"><h4>Visitor Timing</h4><p>Visitor rules keep the property peaceful and safe.</p></div></div>
+          <div class="rule-card"><div class="rule-icon">🤝</div><div class="rule-body"><h4>Respectful Stay</h4><p>Clean, cooperative shared-living environment.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact section" id="contact">
+      <div class="container contact-grid">
+        <div class="contact-info">
+          <h3>Book a Visit</h3>
+          <p>{{address}}</p>
+          <div class="contact-channels">
+            <a class="channel" href="{{phoneLink}}"><span class="channel-icon ph">☎</span><span><h4>Phone</h4><p>{{phone}}</p></span></a>
+            <a class="channel" href="{{whatsappLink}}"><span class="channel-icon wa">☘</span><span><h4>WhatsApp</h4><p>{{whatsapp}}</p></span></a>
+            <a class="channel" href="{{emailLink}}"><span class="channel-icon em">✉</span><span><h4>Email</h4><p>{{email}}</p></span></a>
+          </div>
+        </div>
+        <div class="contact-form-card">
+          <form class="contact-form" id="contactForm">
+            <div class="form-row"><div class="field"><label>Name <span class="req">*</span></label><input id="fName" placeholder="Your name"></div><div class="field"><label>Phone <span class="req">*</span></label><input id="fPhone" placeholder="Your phone"></div></div>
+            <div class="form-row"><div class="field"><label>Room Type</label><select id="fRoom"><option value="">Select room</option><option>Single Sharing</option><option>Double Sharing</option><option>Triple Sharing</option></select></div><div class="field"><label>Visit Date</label><input id="fDate" type="date"></div></div>
+            <div class="field"><label>Occupation</label><input id="fOcc" placeholder="Student / Professional"></div>
+            <div class="field"><label>Message</label><textarea id="fMsg" placeholder="Tell us what you need"></textarea></div>
+            <div class="form-actions"><button class="btn btn-primary" type="submit">{{ctaText}}</button><a class="btn btn-whatsapp" href="{{whatsappLink}}">WhatsApp Now</a></div>
+          </form>
+          <div class="form-done" id="formDone"><div class="done-icon">✓</div><h3>Thanks!</h3><p>We will connect with you shortly.</p><a class="btn btn-primary" href="{{phoneLink}}">Call Now</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="mobile-bar">
+    <a class="mb-btn mb-call" href="{{phoneLink}}"><span class="mb-icon">☎</span> Call</a>
+    <a class="mb-btn mb-wa" href="{{whatsappLink}}"><span class="mb-icon">☘</span> WhatsApp</a>
+    <a class="mb-btn mb-visit" href="#contact"><span class="mb-icon">⌂</span> Visit</a>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="logo" href="#home"><span class="logo-mark">PG</span><span class="logo-text">{{businessName}}<small>Paying Guest</small></span></a><p>{{tagline}}</p></div>
+        <div class="footer-col"><h4>Quick Links</h4><ul><li><a href="#rooms">Rooms</a></li><li><a href="#amenities">Amenities</a></li><li><a href="#contact">Contact</a></li></ul></div>
+        <div class="footer-col"><h4>Contact</h4><div class="footer-contact-row"><span class="fc-icon">☎</span>{{phone}}</div><div class="footer-contact-row"><span class="fc-icon">✉</span>{{email}}</div></div>
+      </div>
+      <div class="footer-bottom">© {{businessName}}. All rights reserved.</div>
+    </div>
+  </footer>
+</body>
+</html>`;
 }
 
 function injectIntoHtml(html: string, tag: "head" | "body", content: string): string {
@@ -538,8 +761,10 @@ function replaceUnresolvedLocalImages(html: string): string {
     );
 }
 
-function generateHtml(template: { htmlContent: string; cssContent?: string | null; jsContent?: string | null }, data: ProjectData): string {
-  let html = template.htmlContent;
+function generateHtml(template: ProjectTemplate, data: ProjectData): string {
+  let html = hasRenderableHtml(template.htmlContent) || !looksLikePayingGuestTemplate(template)
+    ? template.htmlContent
+    : buildPayingGuestFallbackHtml();
   const heroImageUrl = getProjectValue(data, "heroImageUrl", DEFAULT_HERO_IMAGE_URL);
 
   // Inject CSS and JS if present
@@ -632,6 +857,15 @@ async function generatePreparedHtmlForProject(project: ProjectData & { templateI
   return prepareDownloadHtml(generateHtml(template, project));
 }
 
+async function getPreviewReadyHtml(project: ProjectData & { templateId?: number | null; generatedHtml?: string | null }): Promise<string | null> {
+  if (project.generatedHtml && hasRenderableHtml(project.generatedHtml)) {
+    return prepareDownloadHtml(project.generatedHtml);
+  }
+
+  return (await generatePreparedHtmlForProject(project))
+    ?? (project.generatedHtml ? prepareDownloadHtml(project.generatedHtml) : null);
+}
+
 router.get("/", async (req, res): Promise<void> => {
   const query = ListProjectsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -713,10 +947,9 @@ router.get("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Always serve preview-ready HTML so existing projects don't show stuck loaders.
-  // prepareDownloadHtml is idempotent (wj-reveal script guards against double-inject).
-  if (project.generatedHtml) {
-    res.json({ ...project, generatedHtml: prepareDownloadHtml(project.generatedHtml) });
+  const previewHtml = await getPreviewReadyHtml(project);
+  if (previewHtml) {
+    res.json({ ...project, generatedHtml: previewHtml });
   } else {
     res.json(project);
   }
@@ -739,13 +972,14 @@ router.get("/:id/preview", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!project.generatedHtml) {
+  const previewHtml = await getPreviewReadyHtml(project);
+  if (!previewHtml) {
     res.status(404).send("Project has not been generated yet.");
     return;
   }
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(prepareDownloadHtml(project.generatedHtml));
+  res.send(previewHtml);
 });
 
 router.put("/:id", async (req, res): Promise<void> => {
@@ -945,7 +1179,7 @@ router.get("/:id/download-zip", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${slug}-demo.zip"`);
 
-  const downloadHtml = prepareDownloadHtml(project.generatedHtml);
+  const downloadHtml = await getPreviewReadyHtml(project) ?? prepareDownloadHtml(project.generatedHtml);
 
   const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.pipe(res);
