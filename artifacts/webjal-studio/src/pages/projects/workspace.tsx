@@ -130,7 +130,7 @@ export default function ProjectWorkspace() {
 
   useEffect(() => {
     if (project?.generatedHtml && !isEditModeRef.current) {
-      setPreviewHtml(project.generatedHtml);
+      setPreviewHtml(buildPreviewHtml(project.generatedHtml));
     }
     return undefined;
   }, [project?.generatedHtml]);
@@ -167,8 +167,29 @@ export default function ProjectWorkspace() {
     return () => window.removeEventListener("message", handleMessage);
   }, [id]);
 
+  function buildPreviewHtml(html: string): string {
+    const base = `<base href="${window.location.origin}/">`;
+
+    if (/<base\b/i.test(html)) {
+      return html;
+    }
+
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(/<head([^>]*)>/i, `<head$1>${base}`);
+    }
+
+    if (/<html[^>]*>/i.test(html)) {
+      return html.replace(/<html([^>]*)>/i, `<html$1><head>${base}</head>`);
+    }
+
+    return `<!DOCTYPE html><html><head>${base}</head><body>${html}</body></html>`;
+  }
+
   function buildEditHtml(html: string): string {
-    return html.replace("</body>", `${EDITOR_SCRIPT}\n</body>`);
+    const withEditor = /<\/body>/i.test(html)
+      ? html.replace(/<\/body>/i, `${EDITOR_SCRIPT}\n</body>`)
+      : `${html}\n${EDITOR_SCRIPT}`;
+    return buildPreviewHtml(withEditor);
   }
 
   function enterEditMode() {
@@ -183,7 +204,7 @@ export default function ProjectWorkspace() {
     setEditSaveStatus("idle");
     const html = editedHtmlRef.current ?? project?.generatedHtml;
     if (!html) return;
-    setPreviewHtml(html);
+    setPreviewHtml(buildPreviewHtml(html));
   }
 
   const updateMutation = useUpdateProject({
@@ -212,7 +233,7 @@ export default function ProjectWorkspace() {
         setEditSaveStatus("idle");
         queryClient.setQueryData(getGetProjectQueryKey(Number(id)), data);
         if (data.generatedHtml) {
-          setPreviewHtml(data.generatedHtml);
+          setPreviewHtml(buildPreviewHtml(data.generatedHtml));
         }
         toast({ title: "Website generated successfully" });
       },

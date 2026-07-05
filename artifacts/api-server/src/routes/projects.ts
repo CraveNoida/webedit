@@ -438,6 +438,15 @@ function getProjectValue(data: ProjectData, key: keyof ProjectData, fallback = "
   return value.trim() || fallback;
 }
 
+function injectIntoHtml(html: string, tag: "head" | "body", content: string): string {
+  const closingTag = new RegExp(`</${tag}>`, "i");
+  if (closingTag.test(html)) {
+    return html.replace(closingTag, `${content}\n</${tag}>`);
+  }
+
+  return `${html}\n${content}`;
+}
+
 function isLocalImageUrl(url: string): boolean {
   const clean = url.trim();
   if (!clean || clean.includes("{{")) return false;
@@ -535,10 +544,10 @@ function generateHtml(template: { htmlContent: string; cssContent?: string | nul
 
   // Inject CSS and JS if present
   if (template.cssContent) {
-    html = html.replace("</head>", `<style>\n${template.cssContent}\n</style>\n</head>`);
+    html = injectIntoHtml(html, "head", `<style>\n${template.cssContent}\n</style>`);
   }
   if (template.jsContent) {
-    html = html.replace("</body>", `<script>\n${template.jsContent}\n</script>\n</body>`);
+    html = injectIntoHtml(html, "body", `<script>\n${template.jsContent}\n</script>`);
   }
 
   // Replace all placeholders
