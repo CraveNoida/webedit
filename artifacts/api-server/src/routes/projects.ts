@@ -222,7 +222,11 @@ function isPlausibleBrandName(value: string, businessName: string): boolean {
   if (clean.toLowerCase() === businessName.toLowerCase()) return false;
   if (clean.length < 3 || clean.length > 80) return false;
   if (clean.split(/\s+/).length > 6) return false;
-  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo|results|courses|why us)$/i.test(clean);
+  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo|results|courses|why us|quick links|follow us|contact info|our courses|book free demo class)$/i.test(clean);
+}
+
+function normalizedBrandKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function addBrandCandidate(candidates: Set<string>, value: string | null | undefined, businessName: string): void {
@@ -231,6 +235,15 @@ function addBrandCandidate(candidates: Set<string>, value: string | null | undef
     .replace(/\s*[|:-]\s*(?:home|official|website|demo).*$/i, "")
     .trim();
   if (isPlausibleBrandName(clean, businessName)) candidates.add(clean);
+}
+
+function addStandaloneBrandCandidate(candidates: Set<string>, html: string, businessName: string): void {
+  const clean = stripHtmlToText(html);
+  const words = clean.split(/\s+/).filter(Boolean);
+  const hasNestedMarkup = /<[^>]+>/.test(html);
+  const looksStyledBrand = hasNestedMarkup && words.length <= 3 && words.every((word) => /^[A-Z][A-Za-z0-9&'.-]*$/.test(word));
+
+  if (looksStyledBrand) addBrandCandidate(candidates, clean, businessName);
 }
 
 function addInlineBrandCandidates(candidates: Set<string>, text: string, businessName: string): void {
@@ -271,11 +284,30 @@ function findBusinessNameCandidates(html: string, businessName: string): string[
     addBrandCandidate(candidates, extractLeadingBrandCandidate(match[1], businessName), businessName);
   }
 
-  for (const match of html.matchAll(/<(?:h[1-6]|p|span|strong|em|li|a|button|small)\b[^>]*>([\s\S]*?)<\/(?:h[1-6]|p|span|strong|em|li|a|button|small)>/gi)) {
+  for (const match of html.matchAll(/<(?:h[1-6]|p|span|strong|em|li|a|button|small|div)\b[^>]*>([\s\S]*?)<\/(?:h[1-6]|p|span|strong|em|li|a|button|small|div)>/gi)) {
+    addStandaloneBrandCandidate(candidates, match[1], businessName);
     addInlineBrandCandidates(candidates, match[1], businessName);
   }
 
   return [...candidates].sort((a, b) => b.length - a.length);
+}
+
+function replaceStandaloneBrandElements(value: string, candidates: string[], businessName: string): string {
+  const candidateKeys = new Set(candidates.map(normalizedBrandKey).filter(Boolean));
+  if (!candidateKeys.size) return value;
+
+  return value.replace(
+    /<(h[1-6]|span|strong|em|a|small)\b([^>]*)>([\s\S]*?)<\/\1>/gi,
+    (match, tag: string, attrs: string, inner: string) => {
+      if (/<(?:script|style|template|img|picture|svg|video|iframe|form|input|button|ul|ol|li)\b/i.test(inner)) return match;
+      const key = normalizedBrandKey(stripHtmlToText(inner));
+      if (!candidateKeys.has(key)) return match;
+      const replacement = /\b(?:logo|brand|navbar-brand|site-title|company-name)\b/i.test(attrs)
+        ? textLogoMarkup(businessName)
+        : escapeHtmlText(businessName);
+      return `<${tag}${attrs}>${replacement}</${tag}>`;
+    },
+  );
 }
 
 function replaceBusinessNameInText(value: string, candidates: string[], businessName: string): string {
@@ -286,7 +318,7 @@ function replaceBusinessNameInText(value: string, candidates: string[], business
   return out;
 }
 
-function replaceBusinessNameEverywhere(html: string, data: ProjectData): string {
+export function replaceBusinessNameEverywhere(html: string, data: ProjectData): string {
   const businessName = getProjectValue(data, "businessName");
   if (!businessName) return html;
 
@@ -297,7 +329,7 @@ function replaceBusinessNameEverywhere(html: string, data: ProjectData): string 
     .split(/(<(?:script|style|template)\b[\s\S]*?<\/(?:script|style|template)>)/gi)
     .map((part) => {
       if (/^<(?:script|style|template)\b/i.test(part)) return part;
-      return replaceBusinessNameInText(part, candidates, businessName);
+      return replaceBusinessNameInText(replaceStandaloneBrandElements(part, candidates, businessName), candidates, businessName);
     })
     .join("");
 }
