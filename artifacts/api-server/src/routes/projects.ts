@@ -123,52 +123,59 @@ function textLogoFromImage(tag: string, businessName: string): string {
   return `<span class="${escapeDoubleQuotedAttr(`${className}${roleClass}`.trim())}" data-wj-logo-text>${escapeHtmlText(businessName)}</span>`;
 }
 
-function applyEditableLogoText(html: string, data: ProjectData): string {
-  const businessName = getProjectValue(data, "businessName");
-  const logoUrl = getProjectValue(data, "logoUrl");
-  if (!businessName && !logoUrl) return html;
+function textLogoMarkup(businessName: string): string {
+  return `<span class="wj-logo-text" data-wj-logo-text>${escapeHtmlText(businessName)}</span>`;
+}
 
-  let usedTextLogo = false;
-  const out = html.replace(/<img\b[^>]*>/gi, (tag) => {
-    if (!looksLikeLogoImage(tag)) return tag;
-    if (logoUrl) {
-      return setDoubleQuotedAttr(setDoubleQuotedAttr(tag, "src", logoUrl), "alt", businessName);
-    }
-    usedTextLogo = true;
-    return textLogoFromImage(tag, businessName);
-  });
-
-  if (!usedTextLogo) return out;
+function ensureLogoTextStyle(html: string): string {
+  if (html.includes('id="wj-logo-text-style"') || !html.includes("data-wj-logo-text")) return html;
 
   const style = `<style id="wj-logo-text-style">
 .wj-logo-text {
   display: inline-flex;
   align-items: center;
   width: auto !important;
-  max-width: min(260px, 52vw) !important;
+  max-width: min(320px, 58vw) !important;
   height: auto !important;
   object-fit: unset !important;
-  font: 800 1.45rem/1.05 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 900 1.55rem/1.05 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0 !important;
   white-space: nowrap;
-  text-decoration: none;
+  text-decoration: none !important;
+  background: linear-gradient(135deg, #111827 0%, #2563eb 48%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
 }
+a .wj-logo-text { text-decoration: none !important; }
 .nav-logo .wj-logo-text-dark,
-.wj-logo-text-dark { color: #ffffff; text-shadow: 0 1px 8px rgba(0,0,0,.25); }
+.wj-logo-text-dark { color: #ffffff !important; background: none; text-shadow: 0 1px 8px rgba(0,0,0,.25); }
 .nav-logo .wj-logo-text-light,
-.wj-logo-text-light { color: #111827; text-shadow: none; }
+.wj-logo-text-light { color: #111827 !important; background: none; text-shadow: none; }
 .nav-logo .nav-logo-light.wj-logo-text,
 .nav-logo .logo-light.wj-logo-text { display: none !important; }
 #main-nav.scrolled .nav-logo-dark.wj-logo-text,
 #main-nav.scrolled .logo-dark.wj-logo-text { display: none !important; }
 #main-nav.scrolled .nav-logo-light.wj-logo-text,
 #main-nav.scrolled .logo-light.wj-logo-text { display: inline-flex !important; }
-@media (max-width: 640px) { .wj-logo-text { font-size: 1.15rem; max-width: 180px !important; } }
+@media (max-width: 640px) { .wj-logo-text { font-size: 1.15rem; max-width: 210px !important; } }
 </style>`;
 
-  return out.includes("</head>")
-    ? out.replace("</head>", `${style}\n</head>`)
-    : `${style}\n${out}`;
+  return html.includes("</head>")
+    ? html.replace("</head>", `${style}\n</head>`)
+    : `${style}\n${html}`;
+}
+
+function applyEditableLogoText(html: string, data: ProjectData): string {
+  const businessName = getProjectValue(data, "businessName");
+  if (!businessName) return html;
+
+  const out = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (!looksLikeLogoImage(tag)) return tag;
+    return textLogoFromImage(tag, businessName);
+  });
+
+  return ensureLogoTextStyle(out);
 }
 
 function replaceSimpleElementText(markup: string, selectorWords: string[], value: string): string {
@@ -190,14 +197,23 @@ function replaceLogoBlockText(markup: string, businessName: string): string {
     /<([a-z][\w:-]*)\b([^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company-name)[^"']*["'][^>]*)>([\s\S]*?)<\/\1>/gi,
     (match, tag: string, attrs: string, inner: string) => {
       if (/^(?:header|nav|ul|ol|li)$/i.test(tag)) return match;
-      if (/<(?:img|svg|picture)\b/i.test(inner)) return match;
 
       const text = stripHtmlToText(inner);
-      if (!text || text.split(/\s+/).length > 6) return match;
+      const hasLogoMedia = /<(?:img|svg|picture)\b/i.test(inner);
+      if (!hasLogoMedia && (!text || text.split(/\s+/).length > 6)) return match;
 
-      return `<${tag}${attrs}>${escapeHtmlText(businessName)}</${tag}>`;
+      return `<${tag}${attrs}>${textLogoMarkup(businessName)}</${tag}>`;
     },
   );
+}
+
+function replaceHeaderLogoImages(markup: string, businessName: string): string {
+  if (!businessName) return markup;
+
+  return markup.replace(/<img\b[^>]*>/gi, (tag) => {
+    if (!looksLikeLogoImage(tag)) return tag;
+    return textLogoFromImage(tag, businessName);
+  });
 }
 
 function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
@@ -224,17 +240,20 @@ function applyHeaderProjectDetails(html: string, data: ProjectData): string {
   const whatsappLink = whatsappDigits ? `https://wa.me/${whatsappDigits}` : "";
   const emailLink = email ? `mailto:${email}` : "";
 
-  return html.replace(/<(header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, (section) => {
+  const outHtml = html.replace(/<(header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, (section) => {
     let out = section;
 
     out = replaceSimpleElementText(out, ["logo-text", "brand-name", "brand-title", "site-title", "company-name"], businessName);
     out = replaceLogoBlockText(out, businessName);
+    out = replaceHeaderLogoImages(out, businessName);
 
     out = out.replace(
       /<a\b([^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company)[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi,
       (match, attrs: string, inner: string) => {
-        if (!businessName || /<(?:img|svg|picture)\b/i.test(inner)) return match;
-        return `<a${attrs}>${escapeHtmlText(businessName)}</a>`;
+        if (!businessName) return match;
+        const text = stripHtmlToText(inner);
+        if (!/<(?:img|svg|picture)\b/i.test(inner) && text.split(/\s+/).length > 6) return match;
+        return `<a${attrs}>${textLogoMarkup(businessName)}</a>`;
       },
     );
 
@@ -252,6 +271,8 @@ function applyHeaderProjectDetails(html: string, data: ProjectData): string {
 
     return out;
   });
+
+  return ensureLogoTextStyle(outHtml);
 }
 
 function promoteRenderableImages(html: string): string {
