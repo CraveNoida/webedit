@@ -216,6 +216,76 @@ function replaceHeaderLogoImages(markup: string, businessName: string): string {
   });
 }
 
+function isPlausibleBrandName(value: string, businessName: string): boolean {
+  const clean = value.trim();
+  if (!clean || clean.includes("{{")) return false;
+  if (clean.toLowerCase() === businessName.toLowerCase()) return false;
+  if (clean.length < 3 || clean.length > 80) return false;
+  if (clean.split(/\s+/).length > 6) return false;
+  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo|results|courses|why us)$/i.test(clean);
+}
+
+function addBrandCandidate(candidates: Set<string>, value: string | null | undefined, businessName: string): void {
+  if (!value) return;
+  const clean = stripHtmlToText(value)
+    .replace(/\s*[|:-]\s*(?:home|official|website|demo).*$/i, "")
+    .trim();
+  if (isPlausibleBrandName(clean, businessName)) candidates.add(clean);
+}
+
+function extractLeadingBrandCandidate(text: string, businessName: string): string | null {
+  const clean = stripHtmlToText(text);
+  const match = clean.match(/^([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,4})\s+(?:for|classes|class|coaching|academy|school|institute|courses|results)\b/);
+  const candidate = match?.[1]?.trim() ?? "";
+  return isPlausibleBrandName(candidate, businessName) ? candidate : null;
+}
+
+function findBusinessNameCandidates(html: string, businessName: string): string[] {
+  const candidates = new Set<string>();
+
+  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleMatch) addBrandCandidate(candidates, titleMatch[1].split(/\s*(?:\||-|--)\s*/)[0], businessName);
+
+  const headerOrNav = [...html.matchAll(/<(header|nav)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
+    .map((match) => match[2])
+    .join("\n");
+  if (headerOrNav) {
+    for (const match of headerOrNav.matchAll(/<[^>]+\b(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company-name)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi)) {
+      addBrandCandidate(candidates, match[1], businessName);
+    }
+  }
+
+  for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) {
+    addBrandCandidate(candidates, extractLeadingBrandCandidate(match[1], businessName), businessName);
+  }
+
+  return [...candidates].sort((a, b) => b.length - a.length);
+}
+
+function replaceBusinessNameInText(value: string, candidates: string[], businessName: string): string {
+  let out = value;
+  for (const candidate of candidates) {
+    out = out.replace(new RegExp(escapeRegExp(candidate), "gi"), businessName);
+  }
+  return out;
+}
+
+function replaceBusinessNameEverywhere(html: string, data: ProjectData): string {
+  const businessName = getProjectValue(data, "businessName");
+  if (!businessName) return html;
+
+  const candidates = findBusinessNameCandidates(html, businessName);
+  if (!candidates.length) return html;
+
+  return html
+    .split(/(<(?:script|style|template)\b[\s\S]*?<\/(?:script|style|template)>)/gi)
+    .map((part) => {
+      if (/^<(?:script|style|template)\b/i.test(part)) return part;
+      return replaceBusinessNameInText(part, candidates, businessName);
+    })
+    .join("");
+}
+
 function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
   if (!hrefValue && !textValue) return markup;
   return markup.replace(
@@ -1044,6 +1114,7 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
     html = html.replaceAll(key, value);
   }
 
+  html = replaceBusinessNameEverywhere(html, data);
   html = applyHeaderProjectDetails(applyEditableLogoText(html, data), data);
 
   return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
@@ -1083,11 +1154,14 @@ async function generatePreparedHtmlForProject(project: ProjectData & { templateI
 
 async function getPreviewReadyHtml(project: ProjectData & { templateId?: number | null; generatedHtml?: string | null }): Promise<string | null> {
   if (project.generatedHtml && hasRenderableHtml(project.generatedHtml)) {
-    return prepareDownloadHtml(applyHeaderProjectDetails(project.generatedHtml, project));
+    const refreshedHtml = replaceBusinessNameEverywhere(project.generatedHtml, project);
+    return prepareDownloadHtml(applyHeaderProjectDetails(refreshedHtml, project));
   }
 
   return (await generatePreparedHtmlForProject(project))
-    ?? (project.generatedHtml ? prepareDownloadHtml(applyHeaderProjectDetails(project.generatedHtml, project)) : null);
+    ?? (project.generatedHtml
+      ? prepareDownloadHtml(applyHeaderProjectDetails(replaceBusinessNameEverywhere(project.generatedHtml, project), project))
+      : null);
 }
 
 router.get("/", async (req, res): Promise<void> => {
