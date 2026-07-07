@@ -252,10 +252,13 @@ function addInlineBrandCandidates(candidates: Set<string>, text: string, busines
   for (const match of clean.matchAll(/\b[A-Z][a-z]+[A-Z][A-Za-z0-9]*(?:\s+(?:Academy|Coaching|Classes|Institute|School|Education|Tutorials|College|University))?\b/g)) {
     addBrandCandidate(candidates, match[0], businessName);
   }
+}
 
-  for (const match of clean.matchAll(/\b(?:by|from|at|with|choose|join|welcome to|about)\s+([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,4})\b/gi)) {
-    addBrandCandidate(candidates, match[1], businessName);
-  }
+function looksLikeReviewerContext(attrs: string, inner = ""): boolean {
+  const nestedMarkers = [...inner.matchAll(/\b(?:class|id)=["']([^"']*)["']/gi)].map((match) => match[1]).join(" ");
+  return /\b(?:review|reviews|reviewer|testimonial|testimonials|rating|ratings|stars|author|avatar|client|customer|student|parent|alumni)\b/i.test(
+    `${attrs} ${nestedMarkers}`,
+  );
 }
 
 function extractLeadingBrandCandidate(text: string, businessName: string): string | null {
@@ -284,9 +287,10 @@ function findBusinessNameCandidates(html: string, businessName: string): string[
     addBrandCandidate(candidates, extractLeadingBrandCandidate(match[1], businessName), businessName);
   }
 
-  for (const match of html.matchAll(/<(?:h[1-6]|p|span|strong|em|li|a|button|small|div)\b[^>]*>([\s\S]*?)<\/(?:h[1-6]|p|span|strong|em|li|a|button|small|div)>/gi)) {
-    addStandaloneBrandCandidate(candidates, match[1], businessName);
-    addInlineBrandCandidates(candidates, match[1], businessName);
+  for (const match of html.matchAll(/<(h[1-6]|p|span|strong|em|li|a|button|small|div)\b([^>]*)>([\s\S]*?)<\/\1>/gi)) {
+    if (looksLikeReviewerContext(match[2], match[3])) continue;
+    addStandaloneBrandCandidate(candidates, match[3], businessName);
+    addInlineBrandCandidates(candidates, match[3], businessName);
   }
 
   for (const textNode of html.split(/<[^>]+>/g)) {
