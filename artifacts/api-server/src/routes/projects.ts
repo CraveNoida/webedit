@@ -334,6 +334,11 @@ export function replaceBusinessNameEverywhere(html: string, data: ProjectData): 
     .join("");
 }
 
+function personalizeProjectHtml(html: string, data: ProjectData): string {
+  const withBusinessName = replaceBusinessNameEverywhere(html, data);
+  return applyHeaderProjectDetails(withBusinessName, data);
+}
+
 function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
   if (!hrefValue && !textValue) return markup;
   return markup.replace(
@@ -451,7 +456,8 @@ function promoteRenderableImages(html: string): string {
  * - Injects a script that continuously forces content visible, overriding
  *   GSAP/ScrollTrigger/AOS/WOW.js animations that keep sections at opacity:0
  */
-function prepareDownloadHtml(html: string): string {
+export function prepareDownloadHtml(html: string, options: { stripLocalAssets?: boolean } = {}): string {
+  const stripLocalAssets = options.stripLocalAssets ?? true;
   let out = promoteRenderableImages(stripImportedExtraPages(html));
 
   // Replace older preview guards so existing generated projects receive the newest fix.
@@ -459,11 +465,13 @@ function prepareDownloadHtml(html: string): string {
     .replace(/<style\b[^>]*\bid=["']wj-reveal-style["'][^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script\b[^>]*\bid=["']wj-reveal["'][^>]*>[\s\S]*?<\/script>/gi, "");
 
-  // 1. Strip relative-path <link> stylesheets (not http/https/protocol-relative)
-  out = out.replace(/<link\b[^>]*\bhref=["'](?!https?:\/\/|\/\/)([^"']+\.css)["'][^>]*>/gi, '');
+  if (stripLocalAssets) {
+    // 1. Strip relative-path <link> stylesheets (not http/https/protocol-relative)
+    out = out.replace(/<link\b[^>]*\bhref=["'](?!https?:\/\/|\/\/)([^"']+\.css)["'][^>]*>/gi, '');
 
-  // 2. Strip relative-path <script src> tags
-  out = out.replace(/<script\b[^>]*\bsrc=["'](?!https?:\/\/|\/\/)([^"']+\.js)["'][^>]*><\/script>/gi, '');
+    // 2. Strip relative-path <script src> tags
+    out = out.replace(/<script\b[^>]*\bsrc=["'](?!https?:\/\/|\/\/)([^"']+\.js)["'][^>]*><\/script>/gi, '');
+  }
 
   // 3. Hide loading-screen overlay in markup (both id="loader" and class="loading-screen" patterns)
   out = out.replace(/(<div\b[^>]*\bid=["']loader["'])([^>]*>)/gi, '$1 style="display:none!important"$2');
@@ -1162,8 +1170,7 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
     html = html.replaceAll(key, value);
   }
 
-  html = replaceBusinessNameEverywhere(html, data);
-  html = applyHeaderProjectDetails(applyEditableLogoText(html, data), data);
+  html = personalizeProjectHtml(applyEditableLogoText(html, data), data);
 
   return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
 }
@@ -1197,18 +1204,17 @@ async function generatePreparedHtmlForProject(project: ProjectData & { templateI
   if (!templateRow) return null;
 
   const template = await prepareTemplateForProject(templateRow);
-  return prepareDownloadHtml(generateHtml(template, project));
+  return prepareDownloadHtml(generateHtml(template, project), { stripLocalAssets: false });
 }
 
 async function getPreviewReadyHtml(project: ProjectData & { templateId?: number | null; generatedHtml?: string | null }): Promise<string | null> {
   if (project.generatedHtml && hasRenderableHtml(project.generatedHtml)) {
-    const refreshedHtml = replaceBusinessNameEverywhere(project.generatedHtml, project);
-    return prepareDownloadHtml(applyHeaderProjectDetails(refreshedHtml, project));
+    return prepareDownloadHtml(personalizeProjectHtml(project.generatedHtml, project), { stripLocalAssets: false });
   }
 
   return (await generatePreparedHtmlForProject(project))
     ?? (project.generatedHtml
-      ? prepareDownloadHtml(applyHeaderProjectDetails(replaceBusinessNameEverywhere(project.generatedHtml, project), project))
+      ? prepareDownloadHtml(personalizeProjectHtml(project.generatedHtml, project), { stripLocalAssets: false })
       : null);
 }
 
@@ -1422,7 +1428,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
   }
 
   const template = await prepareTemplateForProject(templateRow);
-  const generatedHtml = prepareDownloadHtml(generateHtml(template, project));
+  const generatedHtml = prepareDownloadHtml(generateHtml(template, project), { stripLocalAssets: false });
 
   const [updated] = await db
     .update(projectsTable)
@@ -1525,7 +1531,10 @@ router.get("/:id/download-zip", async (req, res): Promise<void> => {
   res.setHeader("Content-Type", "application/zip");
   res.setHeader("Content-Disposition", `attachment; filename="${slug}-demo.zip"`);
 
-  const downloadHtml = await getPreviewReadyHtml(project) ?? prepareDownloadHtml(project.generatedHtml);
+  const downloadSource = project.generatedHtml
+    ? personalizeProjectHtml(project.generatedHtml, project)
+    : (await generatePreparedHtmlForProject(project)) ?? project.generatedHtml;
+  const downloadHtml = prepareDownloadHtml(downloadSource);
 
   const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.pipe(res);
