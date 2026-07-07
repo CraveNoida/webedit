@@ -289,6 +289,10 @@ function findBusinessNameCandidates(html: string, businessName: string): string[
     addInlineBrandCandidates(candidates, match[1], businessName);
   }
 
+  for (const textNode of html.split(/<[^>]+>/g)) {
+    addInlineBrandCandidates(candidates, textNode, businessName);
+  }
+
   return [...candidates].sort((a, b) => b.length - a.length);
 }
 
@@ -713,7 +717,11 @@ function hasRenderableHtml(html: string): boolean {
 }
 
 function hasTemplateStyling(html: string): boolean {
-  if (/<link\b[^>]*\brel=["'][^"']*stylesheet[^"']*["'][^>]*>/i.test(html)) return true;
+  const stylesheetLinks = [...html.matchAll(/<link\b[^>]*\brel=["'][^"']*stylesheet[^"']*["'][^>]*>/gi)];
+  if (stylesheetLinks.some((match) => {
+    const href = getAttr(match[0], "href") ?? "";
+    return /^(?:https?:)?\/\//i.test(href) || /^(?:data|blob):/i.test(href) || /^\/?api\/uploads\//i.test(href);
+  })) return true;
 
   const styleTags = [...html.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi)];
   return styleTags.some(([, attrs, css]) => {
@@ -1145,7 +1153,7 @@ function replaceUnresolvedLocalImages(html: string): string {
     );
 }
 
-function generateHtml(template: ProjectTemplate, data: ProjectData): string {
+export function generateHtml(template: ProjectTemplate, data: ProjectData): string {
   const isPayingGuestTemplate = looksLikePayingGuestTemplate(template);
   let html = hasRenderableHtml(template.htmlContent)
     && (!isPayingGuestTemplate || hasCompletePayingGuestHtml(template.htmlContent))
