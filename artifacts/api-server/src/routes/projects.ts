@@ -222,7 +222,7 @@ function isPlausibleBrandName(value: string, businessName: string): boolean {
   if (clean.toLowerCase() === businessName.toLowerCase()) return false;
   if (clean.length < 3 || clean.length > 80) return false;
   if (clean.split(/\s+/).length > 6) return false;
-  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo|results|courses|why us|quick links|follow us|contact info|our courses|book free demo class)$/i.test(clean);
+  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo|results|courses|why us|quick links|follow us|contact info|our courses|book free demo class|class|classes|exam|exams|competitive exams)$/i.test(clean);
 }
 
 function normalizedBrandKey(value: string): string {
@@ -335,8 +335,10 @@ export function replaceBusinessNameEverywhere(html: string, data: ProjectData): 
 }
 
 function personalizeProjectHtml(html: string, data: ProjectData): string {
+  const businessName = getProjectValue(data, "businessName");
   const withBusinessName = replaceBusinessNameEverywhere(html, data);
-  return applyHeaderProjectDetails(withBusinessName, data);
+  const withLogoBlocks = replaceHeaderLogoImages(replaceLogoBlockText(withBusinessName, businessName), businessName);
+  return applyHeaderProjectDetails(withLogoBlocks, data);
 }
 
 function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
@@ -719,6 +721,44 @@ function hasTemplateStyling(html: string): boolean {
     if (/^wj-(?:logo-text-style|reveal-style)$/i.test(id)) return false;
     return css.replace(/\/\*[\s\S]*?\*\//g, "").trim().length > 0;
   });
+}
+
+function hasInlineTemplateStyling(html: string): boolean {
+  const styleTags = [...html.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi)];
+  return styleTags.some(([, attrs, css]) => {
+    const id = getAttr(`<style${attrs}>`, "id") ?? "";
+    if (/^wj-(?:logo-text-style|reveal-style|fallback-template-style)$/i.test(id)) return false;
+    return css.replace(/\/\*[\s\S]*?\*\//g, "").trim().length > 0;
+  });
+}
+
+function ensureFallbackTemplateStyle(html: string): string {
+  if (hasInlineTemplateStyling(html) || html.includes('id="wj-fallback-template-style"')) return html;
+
+  const style = `<style id="wj-fallback-template-style">
+:root { --wj-primary: #1a73e8; --wj-dark: #172033; --wj-muted: #5f6b7a; --wj-surface: #ffffff; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--wj-dark); background: #f4f8ff; line-height: 1.6; }
+header, nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px clamp(18px, 5vw, 72px); background: var(--wj-surface); box-shadow: 0 1px 0 rgba(15,23,42,.08); }
+nav a, header a { color: #1f2937; text-decoration: none; font-weight: 500; margin: 0 10px; }
+nav a:hover, header a:hover { color: var(--wj-primary); }
+main, section { padding: clamp(36px, 7vw, 86px) clamp(18px, 5vw, 72px); }
+.hero, [class*="hero"], .banner, [class*="banner"] { min-height: 520px; display: grid; align-items: center; background: linear-gradient(135deg, #eef5ff, #ffffff); }
+h1 { font-size: clamp(2.4rem, 8vw, 5.6rem); line-height: 1.05; margin: 0 0 20px; letter-spacing: 0; font-weight: 900; }
+h2 { font-size: clamp(1.8rem, 5vw, 3.2rem); line-height: 1.15; margin: 0 0 16px; font-weight: 850; }
+h3 { font-size: 1.35rem; line-height: 1.25; margin: 0 0 12px; }
+p { max-width: 760px; color: var(--wj-muted); font-size: clamp(1rem, 2vw, 1.2rem); }
+a[href^="tel"], a[href^="https://wa.me"], button, .btn, [class*="btn"], [class*="button"], .cta, [class*="cta"] { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 24px; border-radius: 12px; background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #fff !important; text-decoration: none; font-weight: 750; box-shadow: 0 14px 32px rgba(37,99,235,.25); border: 0; }
+img { max-width: 100%; height: auto; display: block; border-radius: 18px; }
+.card, [class*="card"], .box, [class*="box"] { background: var(--wj-surface); border-radius: 18px; padding: 24px; box-shadow: 0 18px 60px rgba(15,23,42,.08); }
+footer { padding: clamp(36px, 6vw, 72px) clamp(18px, 5vw, 72px); background: #111827; color: #fff; }
+footer p, footer a { color: rgba(255,255,255,.72); }
+@media (max-width: 720px) { header, nav { align-items: flex-start; flex-direction: column; gap: 12px; } main, section { padding: 34px 18px; } }
+</style>`;
+
+  return html.includes("</head>")
+    ? html.replace("</head>", `${style}\n</head>`)
+    : `${style}\n${html}`;
 }
 
 function looksLikePayingGuestTemplate(template: ProjectTemplate): boolean {
@@ -1182,6 +1222,9 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
   }
 
   html = personalizeProjectHtml(applyEditableLogoText(html, data), data);
+  if (!template.cssContent?.trim()) {
+    html = ensureFallbackTemplateStyle(html);
+  }
 
   return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
 }
