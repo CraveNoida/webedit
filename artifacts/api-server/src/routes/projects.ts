@@ -233,6 +233,18 @@ function addBrandCandidate(candidates: Set<string>, value: string | null | undef
   if (isPlausibleBrandName(clean, businessName)) candidates.add(clean);
 }
 
+function addInlineBrandCandidates(candidates: Set<string>, text: string, businessName: string): void {
+  const clean = stripHtmlToText(text);
+
+  for (const match of clean.matchAll(/\b[A-Z][a-z]+[A-Z][A-Za-z0-9]*(?:\s+(?:Academy|Coaching|Classes|Institute|School|Education|Tutorials|College|University))?\b/g)) {
+    addBrandCandidate(candidates, match[0], businessName);
+  }
+
+  for (const match of clean.matchAll(/\b(?:by|from|at|with|choose|join|welcome to|about)\s+([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,4})\b/gi)) {
+    addBrandCandidate(candidates, match[1], businessName);
+  }
+}
+
 function extractLeadingBrandCandidate(text: string, businessName: string): string | null {
   const clean = stripHtmlToText(text);
   const match = clean.match(/^([A-Z][\w&'.-]*(?:\s+[A-Z][\w&'.-]*){0,4})\s+(?:for|classes|class|coaching|academy|school|institute|courses|results)\b/);
@@ -257,6 +269,10 @@ function findBusinessNameCandidates(html: string, businessName: string): string[
 
   for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) {
     addBrandCandidate(candidates, extractLeadingBrandCandidate(match[1], businessName), businessName);
+  }
+
+  for (const match of html.matchAll(/<(?:h[1-6]|p|span|strong|em|li|a|button|small)\b[^>]*>([\s\S]*?)<\/(?:h[1-6]|p|span|strong|em|li|a|button|small)>/gi)) {
+    addInlineBrandCandidates(candidates, match[1], businessName);
   }
 
   return [...candidates].sort((a, b) => b.length - a.length);
