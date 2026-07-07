@@ -183,6 +183,23 @@ function replaceSimpleElementText(markup: string, selectorWords: string[], value
   );
 }
 
+function replaceLogoBlockText(markup: string, businessName: string): string {
+  if (!businessName) return markup;
+
+  return markup.replace(
+    /<([a-z][\w:-]*)\b([^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company-name)[^"']*["'][^>]*)>([\s\S]*?)<\/\1>/gi,
+    (match, tag: string, attrs: string, inner: string) => {
+      if (/^(?:header|nav|ul|ol|li)$/i.test(tag)) return match;
+      if (/<(?:img|svg|picture)\b/i.test(inner)) return match;
+
+      const text = stripHtmlToText(inner);
+      if (!text || text.split(/\s+/).length > 6) return match;
+
+      return `<${tag}${attrs}>${escapeHtmlText(businessName)}</${tag}>`;
+    },
+  );
+}
+
 function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
   if (!hrefValue && !textValue) return markup;
   return markup.replace(
@@ -211,6 +228,7 @@ function applyHeaderProjectDetails(html: string, data: ProjectData): string {
     let out = section;
 
     out = replaceSimpleElementText(out, ["logo-text", "brand-name", "brand-title", "site-title", "company-name"], businessName);
+    out = replaceLogoBlockText(out, businessName);
 
     out = out.replace(
       /<a\b([^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company)[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi,
@@ -1044,11 +1062,11 @@ async function generatePreparedHtmlForProject(project: ProjectData & { templateI
 
 async function getPreviewReadyHtml(project: ProjectData & { templateId?: number | null; generatedHtml?: string | null }): Promise<string | null> {
   if (project.generatedHtml && hasRenderableHtml(project.generatedHtml)) {
-    return prepareDownloadHtml(project.generatedHtml);
+    return prepareDownloadHtml(applyHeaderProjectDetails(project.generatedHtml, project));
   }
 
   return (await generatePreparedHtmlForProject(project))
-    ?? (project.generatedHtml ? prepareDownloadHtml(project.generatedHtml) : null);
+    ?? (project.generatedHtml ? prepareDownloadHtml(applyHeaderProjectDetails(project.generatedHtml, project)) : null);
 }
 
 router.get("/", async (req, res): Promise<void> => {
@@ -1210,7 +1228,7 @@ router.put("/:id", async (req, res): Promise<void> => {
   }
 
   if (!didExplicitlyUpdateGeneratedHtml) {
-    res.json({ ...project, generatedHtml: null });
+    res.json({ ...project, generatedHtml: await getPreviewReadyHtml(project) });
     return;
   }
 
