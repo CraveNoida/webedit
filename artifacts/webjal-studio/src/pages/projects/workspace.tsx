@@ -186,9 +186,13 @@ export default function ProjectWorkspace() {
   }
 
   function buildEditHtml(html: string): string {
+    const editorScript = EDITOR_SCRIPT.replace(
+      "__WJ_UPLOAD_ENDPOINT__",
+      apiUrl("/api/uploads").replace(/\\/g, "\\\\").replace(/'/g, "\\'"),
+    );
     const withEditor = /<\/body>/i.test(html)
-      ? html.replace(/<\/body>/i, `${EDITOR_SCRIPT}\n</body>`)
-      : `${html}\n${EDITOR_SCRIPT}`;
+      ? html.replace(/<\/body>/i, `${editorScript}\n</body>`)
+      : `${html}\n${editorScript}`;
     return buildPreviewHtml(withEditor);
   }
 
@@ -652,7 +656,7 @@ export default function ProjectWorkspace() {
                   <FormItem>
                     <FormLabel className="text-xs">Logo</FormLabel>
                     <FormControl>
-                      <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Logo URL..." />
+                      <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Upload logo" />
                     </FormControl>
                   </FormItem>
                 )} />
@@ -661,7 +665,7 @@ export default function ProjectWorkspace() {
                   <FormItem>
                     <FormLabel className="text-xs">Hero Image</FormLabel>
                     <FormControl>
-                      <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Hero image URL..." />
+                      <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Upload hero image" />
                     </FormControl>
                   </FormItem>
                 )} />

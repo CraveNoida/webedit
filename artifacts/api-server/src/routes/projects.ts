@@ -171,6 +171,71 @@ function applyEditableLogoText(html: string, data: ProjectData): string {
     : `${style}\n${out}`;
 }
 
+function replaceSimpleElementText(markup: string, selectorWords: string[], value: string): string {
+  if (!value) return markup;
+  const selector = selectorWords.map(escapeRegExp).join("|");
+  return markup.replace(
+    new RegExp(`(<([a-z][\\w:-]*)\\b[^>]*(?:class|id)=["'][^"']*(?:${selector})[^"']*["'][^>]*>)([\\s\\S]*?)(<\\/\\2>)`, "gi"),
+    (match, open: string, _tag: string, inner: string, close: string) => {
+      if (/<(?:img|svg|picture)\b/i.test(inner)) return match;
+      return `${open}${escapeHtmlText(value)}${close}`;
+    },
+  );
+}
+
+function replaceLinkedContactText(markup: string, hrefPrefix: string, hrefValue: string, textValue: string): string {
+  if (!hrefValue && !textValue) return markup;
+  return markup.replace(
+    new RegExp(`<a\\b([^>]*\\bhref=["']${escapeRegExp(hrefPrefix)}[^"']*["'][^>]*)>([\\s\\S]*?)<\\/a>`, "gi"),
+    (_match, attrs: string, inner: string) => {
+      const nextAttrs = hrefValue
+        ? attrs.replace(/\bhref=(["']).*?\1/i, `href="${escapeDoubleQuotedAttr(hrefValue)}"`)
+        : attrs;
+      const nextText = textValue || inner;
+      return `<a${nextAttrs}>${escapeHtmlText(nextText)}</a>`;
+    },
+  );
+}
+
+function applyHeaderProjectDetails(html: string, data: ProjectData): string {
+  const businessName = getProjectValue(data, "businessName");
+  const phone = getProjectValue(data, "phone");
+  const whatsapp = getProjectValue(data, "whatsapp", phone);
+  const email = getProjectValue(data, "email");
+  const phoneLink = phone ? `tel:${phone}` : "";
+  const whatsappDigits = whatsapp.replace(/[^0-9]/g, "");
+  const whatsappLink = whatsappDigits ? `https://wa.me/${whatsappDigits}` : "";
+  const emailLink = email ? `mailto:${email}` : "";
+
+  return html.replace(/<(header|nav)\b[^>]*>[\s\S]*?<\/\1>/gi, (section) => {
+    let out = section;
+
+    out = replaceSimpleElementText(out, ["logo-text", "brand-name", "brand-title", "site-title", "company-name"], businessName);
+
+    out = out.replace(
+      /<a\b([^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company)[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi,
+      (match, attrs: string, inner: string) => {
+        if (!businessName || /<(?:img|svg|picture)\b/i.test(inner)) return match;
+        return `<a${attrs}>${escapeHtmlText(businessName)}</a>`;
+      },
+    );
+
+    out = replaceLinkedContactText(out, "tel:", phoneLink, phone);
+    out = replaceLinkedContactText(out, "mailto:", emailLink, email);
+    out = replaceLinkedContactText(out, "https://wa.me/", whatsappLink, whatsapp || phone);
+    out = replaceLinkedContactText(out, "https://api.whatsapp.com/", whatsappLink, whatsapp || phone);
+
+    if (phone) {
+      out = out.replace(/(\+91[\s-]?)?[6-9][0-9]{4}[\s-]?[0-9]{5}/g, phone);
+    }
+    if (email) {
+      out = out.replace(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, email);
+    }
+
+    return out;
+  });
+}
+
 function promoteRenderableImages(html: string): string {
   const lazyAttrs = ["data-src", "data-lazy-src", "data-original", "data-image"];
   const bgAttrs = ["data-bg", "data-background", "data-bg-src"];
@@ -940,7 +1005,7 @@ function generateHtml(template: ProjectTemplate, data: ProjectData): string {
     html = html.replaceAll(key, value);
   }
 
-  html = applyEditableLogoText(html, data);
+  html = applyHeaderProjectDetails(applyEditableLogoText(html, data), data);
 
   return promoteRenderableImages(replaceUnresolvedLocalImages(inlineAvailableServerUploads(html)));
 }

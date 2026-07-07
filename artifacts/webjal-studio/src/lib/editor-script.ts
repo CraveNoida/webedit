@@ -27,6 +27,7 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
   var bar=document.createElement('div'); bar.id='wj-bar';
   document.body.prepend(bar);
   var sel=null, saved=null, stimer=null, slabel=null;
+  var UPLOAD_URL='__WJ_UPLOAD_ENDPOINT__';
 
   function syncBarHeight(){
     requestAnimationFrame(function(){
@@ -82,6 +83,17 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
 
   var DEL_BTN='<button class="wb" id="wb-del" style="background:rgba(239,68,68,0.35);border-color:rgba(239,68,68,0.6);">&#x1F5D1; Delete</button>';
 
+  function uploadImageFile(file, done){
+    if(!file) return;
+    setStatus('Uploading...');
+    var fd=new FormData();
+    fd.append('file', file);
+    fetch(UPLOAD_URL,{method:'POST',body:fd})
+      .then(function(r){ if(!r.ok) throw new Error('Upload failed'); return r.json(); })
+      .then(function(data){ if(!data||!data.url) throw new Error('Upload failed'); done(data.url); })
+      .catch(function(){ setStatus('Upload failed'); });
+  }
+
   function textBar(el){
     bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Editing Text</span><div class="ws"></div><button class="wb" id="wb-done">Done</button><button class="wb" id="wb-cancel">Cancel</button>'+DEL_BTN+'<div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
     slabel=bar.querySelector('.sl');
@@ -93,11 +105,11 @@ export const EDITOR_SCRIPT = `<style id="wj-editor-style">
   }
 
   function imgBar(el){
-    var src=(el.getAttribute('src')||'').replace(/"/g,'&quot;');
-    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Image</span><div class="ws"></div><input class="wi" id="wi-url" placeholder="Paste new image URL..." /><button class="wb" id="wb-replace">Replace</button><button class="wb" id="wb-cancel">Cancel</button>'+DEL_BTN+'<div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
+    bar.innerHTML='<span style="background:rgba(255,255,255,0.14);padding:2px 10px;border-radius:4px;font-size:11px;flex-shrink:0;">Image</span><div class="ws"></div><input type="file" id="wi-file" accept="image/*" style="display:none" /><button class="wb" id="wb-upload">Upload Image</button><button class="wb" id="wb-cancel">Cancel</button>'+DEL_BTN+'<div class="sp"></div><span class="sl" style="font-size:11px;opacity:0.6;flex-shrink:0;"></span><button class="wb" id="wb-exit" style="background:rgba(239,68,68,0.3);border-color:rgba(239,68,68,0.5);">Exit Editor</button>';
     slabel=bar.querySelector('.sl');
-    var inp=document.getElementById('wi-url'); inp.value=el.getAttribute('src')||''; setTimeout(function(){ inp.focus(); inp.select(); },10);
-    bar.querySelector('#wb-replace').onclick=function(){ var u=inp.value.trim(); if(u&&el){ el.src=u; el.removeAttribute('srcset'); } commit(); send(); idle(); };
+    var fileInput=document.getElementById('wi-file');
+    bar.querySelector('#wb-upload').onclick=function(){ fileInput.click(); };
+    fileInput.onchange=function(){ var f=fileInput.files&&fileInput.files[0]; uploadImageFile(f,function(u){ if(u&&el){ el.src=u; el.removeAttribute('srcset'); } commit(); send(); idle(); }); };
     bar.querySelector('#wb-cancel').onclick=function(){ commit(); idle(); };
     bar.querySelector('#wb-del').onclick=function(){ if(confirm('Delete this image?')) deleteSelected(); };
     bar.querySelector('#wb-exit').onclick=function(){ commit(); exit(); };

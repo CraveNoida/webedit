@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { UploadCloud, Loader2, Plus, X } from "lucide-react";
+import { UploadCloud, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/api-url";
 
@@ -32,7 +31,7 @@ async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast
   }
 }
 
-export function FileUpload({ value, onChange, placeholder = "Image URL...", className }: FileUploadProps) {
+export function FileUpload({ value, onChange, placeholder = "Upload image", className }: FileUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -49,31 +48,31 @@ export function FileUpload({ value, onChange, placeholder = "Image URL...", clas
 
   return (
     <div className={`flex items-center gap-2 ${className ?? ""}`}>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="flex-1"
-      />
       <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
       <Button
         type="button"
         variant="outline"
-        size="icon"
+        className="flex-1 justify-start gap-2"
         onClick={() => fileInputRef.current?.click()}
         disabled={isUploading}
         title="Upload image"
       >
         {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+        {isUploading ? "Uploading..." : value ? "Change image" : placeholder}
       </Button>
       {value && (
-        <img
-          src={value}
-          alt="preview"
-          className="h-8 w-8 rounded object-cover border shrink-0"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
-        />
+        <>
+          <img
+            src={value}
+            alt="preview"
+            className="h-8 w-8 rounded object-cover border shrink-0"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            onLoad={(e) => { (e.target as HTMLImageElement).style.display = "block"; }}
+          />
+          <Button type="button" variant="ghost" size="icon" onClick={() => onChange("")} title="Remove image">
+            <X className="h-4 w-4" />
+          </Button>
+        </>
       )}
     </div>
   );
@@ -86,19 +85,10 @@ interface GalleryUploadProps {
 }
 
 export function GalleryUpload({ images, onChange, compact = false }: GalleryUploadProps) {
-  const [urlInput, setUrlInput] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const imageList = Array.isArray(images) ? images : [];
-
-  function addUrl() {
-    const trimmed = urlInput.trim();
-    if (trimmed) {
-      onChange([...imageList, trimmed]);
-      setUrlInput("");
-    }
-  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -111,19 +101,11 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const inputH = compact ? "h-8 text-sm" : "";
-  const btnSz = compact ? "h-8 w-8" : "h-9 w-9";
+  const btnH = compact ? "h-8 text-sm" : "";
 
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
-        <Input
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          placeholder="Paste image URL..."
-          className={`flex-1 ${inputH}`}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUrl(); } }}
-        />
         <input
           type="file"
           ref={fileInputRef}
@@ -135,24 +117,13 @@ export function GalleryUpload({ images, onChange, compact = false }: GalleryUplo
         <Button
           type="button"
           variant="outline"
-          size="icon"
-          className={btnSz}
+          className={`flex-1 justify-start gap-2 ${btnH}`}
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
           title="Upload image(s)"
         >
           {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className={btnSz}
-          onClick={addUrl}
-          disabled={!urlInput.trim()}
-          title="Add URL"
-        >
-          <Plus className="h-3.5 w-3.5" />
+          {isUploading ? "Uploading..." : "Upload image(s)"}
         </Button>
       </div>
 

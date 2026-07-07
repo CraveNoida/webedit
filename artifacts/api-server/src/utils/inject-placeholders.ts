@@ -39,6 +39,63 @@ function maskMediaValues(html: string): { html: string; restore: (masked: string
   };
 }
 
+function decodeBasicEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'");
+}
+
+function stripTags(value: string): string {
+  return decodeBasicEntities(value)
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyBusinessName(value: string): boolean {
+  const clean = value.trim();
+  if (clean.includes("{{")) return false;
+  if (clean.length < 3 || clean.length > 80) return false;
+  if (clean.split(/\s+/).length > 8) return false;
+  return !/^(home|about|services|service|gallery|contact|contact us|menu|book now|get in touch|learn more|welcome|website|demo)$/i.test(clean);
+}
+
+function addNameCandidate(candidates: string[], value: string | undefined | null): void {
+  if (!value) return;
+  const clean = stripTags(value).replace(/\s*[|:-]\s*(?:home|official|website|demo).*$/i, "").trim();
+  if (isLikelyBusinessName(clean) && !candidates.some((candidate) => candidate.toLowerCase() === clean.toLowerCase())) {
+    candidates.push(clean);
+  }
+}
+
+function extractBusinessName(html: string): string | null {
+  const candidates: string[] = [];
+  const headerOrNav = [...html.matchAll(/<(header|nav)\b[^>]*>([\s\S]*?)<\/\1>/gi)]
+    .map((match) => match[2])
+    .join("\n");
+
+  if (headerOrNav) {
+    const brandBlocks = [
+      ...headerOrNav.matchAll(/<a\b[^>]*(?:class|id)=["'][^"']*(?:logo|brand|navbar-brand|site-title|company)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi),
+      ...headerOrNav.matchAll(/<[^>]+\b(?:class|id)=["'][^"']*(?:logo-text|brand-name|brand-title|site-title|company-name)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/gi),
+    ];
+    for (const match of brandBlocks) addNameCandidate(candidates, match[1]);
+  }
+
+  const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+  if (titleMatch) addNameCandidate(candidates, titleMatch[1].trim().split(/\s*(?:\||-|--)\s*/)[0]);
+
+  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1Match) addNameCandidate(candidates, h1Match[1]);
+
+  return candidates[0] ?? null;
+}
+
 export function injectPlaceholders(html: string): {
   html: string;
   placeholders: string[];
@@ -49,25 +106,9 @@ export function injectPlaceholders(html: string): {
   const ph = new Set<string>();
 
   // 1. Business name — try <title> first, then <h1> as fallback
-  const titleMatch = result.match(/<title>([^<]+)<\/title>/);
-  const h1Match = result.match(/<h1[^>]*>\s*(?:<[^>]+>)*\s*([^<]{3,}?)\s*(?:<\/[^>]+>)*\s*<\/h1>/i);
-
-  let extractedName: string | null = null;
   const mediaMask = maskMediaValues(result);
   result = mediaMask.html;
-
-  if (titleMatch && !titleMatch[1].includes("{{")) {
-    const candidate = titleMatch[1].trim().split(/\s*[—–|\-]\s*/)[0].trim();
-    if (candidate && candidate.length > 2) extractedName = candidate;
-  }
-
-  // Fallback: use <h1> content if title was generic or missing
-  if (!extractedName && h1Match && !h1Match[1].includes("{{")) {
-    const candidate = h1Match[1].replace(/<[^>]+>/g, "").trim();
-    if (candidate && candidate.length > 2 && candidate.split(/\s+/).length <= 6) {
-      extractedName = candidate;
-    }
-  }
+  const extractedName = extractBusinessName(result);
 
   if (extractedName) {
     const businessName = extractedName;
@@ -105,7 +146,7 @@ export function injectPlaceholders(html: string): {
       result = result.replace(new RegExp(`(\\+91[\\s\\-]?)?${a}[\\s\\-]?${b}`, "g"), "{{phone}}");
       result = result.replace(/href="https?:\/\/wa\.me\/[0-9]+(\?[^"]*)?"/, 'href="{{whatsappLink}}"');
       result = result.replace(/href="https?:\/\/api\.whatsapp\.com\/send\?phone=[0-9]+([^"]*)?"/, 'href="{{whatsappLink}}"');
-      result = result.replace(/href="tel:[^"]*"/g, 'href="tel:{{phone}}"');
+      result = result.replace(/href="tel:[^"]*"/g, 'href="{{phoneLink}}"');
       ph.add("{{phone}}"); ph.add("{{whatsapp}}"); ph.add("{{whatsappLink}}"); ph.add("{{phoneLink}}");
     }
   }

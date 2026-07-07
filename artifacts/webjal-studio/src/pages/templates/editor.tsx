@@ -356,7 +356,7 @@ export default function TemplateEditor() {
                       <FormItem>
                         <FormLabel>Thumbnail</FormLabel>
                         <FormControl>
-                          <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Thumbnail image URL..." />
+                          <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Upload thumbnail image" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

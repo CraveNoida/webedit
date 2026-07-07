@@ -321,7 +321,7 @@ export default function ProjectNew() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base">Gallery Images</CardTitle>
-                  <p className="text-sm text-muted-foreground">Upload photos or paste URLs to populate the website gallery.</p>
+                  <p className="text-sm text-muted-foreground">Upload photos to populate the website gallery.</p>
                 </CardHeader>
                 <CardContent>
                   <GalleryUpload images={galleryImages} onChange={setGalleryImages} />
@@ -367,7 +367,7 @@ export default function ProjectNew() {
                     <FormItem>
                       <FormLabel>Logo</FormLabel>
                       <FormControl>
-                        <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Logo URL..." />
+                        <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Upload logo" />
                       </FormControl>
                     </FormItem>
                   )} />
@@ -375,7 +375,7 @@ export default function ProjectNew() {
                     <FormItem>
                       <FormLabel>Hero Image</FormLabel>
                       <FormControl>
-                        <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Hero image URL..." />
+                        <FileUpload value={field.value ?? ""} onChange={field.onChange} placeholder="Upload hero image" />
                       </FormControl>
                     </FormItem>
                   )} />
