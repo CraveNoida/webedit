@@ -710,6 +710,17 @@ function hasRenderableHtml(html: string): boolean {
     || stripHtmlToText(body).length > 0;
 }
 
+function hasTemplateStyling(html: string): boolean {
+  if (/<link\b[^>]*\brel=["'][^"']*stylesheet[^"']*["'][^>]*>/i.test(html)) return true;
+
+  const styleTags = [...html.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi)];
+  return styleTags.some(([, attrs, css]) => {
+    const id = getAttr(`<style${attrs}>`, "id") ?? "";
+    if (/^wj-(?:logo-text-style|reveal-style)$/i.test(id)) return false;
+    return css.replace(/\/\*[\s\S]*?\*\//g, "").trim().length > 0;
+  });
+}
+
 function looksLikePayingGuestTemplate(template: ProjectTemplate): boolean {
   const haystack = `${template.name ?? ""}\n${template.cssContent ?? ""}\n${template.jsContent ?? ""}`;
   return /paying\s+guest|\bpg\s+accommodation\b|room-card|amenities-grid|WHATSAPP_NUMBER/i.test(haystack);
@@ -1208,7 +1219,7 @@ async function generatePreparedHtmlForProject(project: ProjectData & { templateI
 }
 
 async function getPreviewReadyHtml(project: ProjectData & { templateId?: number | null; generatedHtml?: string | null }): Promise<string | null> {
-  if (project.generatedHtml && hasRenderableHtml(project.generatedHtml)) {
+  if (project.generatedHtml && hasRenderableHtml(project.generatedHtml) && hasTemplateStyling(project.generatedHtml)) {
     return prepareDownloadHtml(personalizeProjectHtml(project.generatedHtml, project), { stripLocalAssets: false });
   }
 
@@ -1428,7 +1439,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
   }
 
   const template = await prepareTemplateForProject(templateRow);
-  const generatedHtml = prepareDownloadHtml(generateHtml(template, project), { stripLocalAssets: false });
+  const generatedHtml = generateHtml(template, project);
 
   const [updated] = await db
     .update(projectsTable)
