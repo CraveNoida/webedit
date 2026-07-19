@@ -58,9 +58,13 @@ router.get("/", async (req, res): Promise<void> => {
     return;
   }
 
-  const templates = await mongo.listTemplates(query.data.category);
-
-  res.json(templates);
+  try {
+    res.json(await mongo.listTemplates(query.data.category));
+  } catch (err) {
+    req.log?.warn({ err }, "Templates list unavailable");
+    logger.warn({ err }, "Templates list unavailable");
+    res.json([]);
+  }
 });
 
 router.post("/", async (req, res): Promise<void> => {

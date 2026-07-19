@@ -33,16 +33,15 @@ export default function Dashboard() {
       <div className="flex-1 bg-gray-50/50 p-8">
         <Card className="max-w-xl border-red-200 bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg text-red-700">Backend connection failed</CardTitle>
+            <CardTitle className="text-lg text-red-700">Database connection failed</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <p>The frontend loaded, but it could not reach the API server.</p>
+            <p>The frontend loaded, and the API server responded, but MongoDB could not be reached.</p>
             <p>
-              In Cloudflare Pages, set <code className="font-mono">VITE_API_BASE_URL</code> to your Render backend URL,
-              then redeploy the frontend.
+              In Vercel, set <code className="font-mono">DATABASE_URL</code> or <code className="font-mono">MONGODB_URI</code> to your MongoDB Atlas connection string.
             </p>
             <p>
-              In Render, set <code className="font-mono">CORS_ORIGIN</code> to this Cloudflare Pages URL.
+              In MongoDB Atlas, allow network access for Vercel, then redeploy.
             </p>
           </CardContent>
         </Card>

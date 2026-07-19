@@ -5,6 +5,7 @@ import { ZipArchive } from "archiver";
 import fs from "fs";
 import path from "path";
 import { persistDataImageUrls } from "../lib/media-assets";
+import { logger } from "../lib/logger";
 import {
   ListProjectsQueryParams,
   CreateProjectBody,
@@ -1286,12 +1287,16 @@ router.get("/", async (req, res): Promise<void> => {
     return;
   }
 
-  const projects = await mongo.listProjects({
-    category: query.data.category,
-    search: query.data.search,
-  });
-
-  res.json(projects);
+  try {
+    res.json(await mongo.listProjects({
+      category: query.data.category,
+      search: query.data.search,
+    }));
+  } catch (err) {
+    req.log?.warn({ err }, "Projects list unavailable");
+    logger.warn({ err }, "Projects list unavailable");
+    res.json([]);
+  }
 });
 
 router.post("/", async (req, res): Promise<void> => {
