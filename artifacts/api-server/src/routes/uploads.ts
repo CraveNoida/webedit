@@ -3,6 +3,7 @@ import multer from "multer";
 import path from "path";
 import { mongo } from "@workspace/db";
 import { createMediaAsset, publicMediaAssetUrl } from "../lib/media-assets";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -33,23 +34,47 @@ const upload = multer({
   },
 });
 
-router.post("/", upload.single("file"), async (req, res): Promise<void> => {
+router.post("/", (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+      res.status(413).json({ error: "Image is too large. Use an image under 10 MB." });
+      return;
+    }
+
+    next(err);
+  });
+}, async (req, res): Promise<void> => {
   if (!req.file) {
     res.status(400).json({ error: "No file uploaded" });
     return;
   }
 
   const mimeType = mimeTypeForFilename(req.file.originalname, req.file.mimetype);
-  const asset = await createMediaAsset({
-    filename: req.file.originalname,
-    mimeType,
-    buffer: req.file.buffer,
-  });
+  try {
+    const asset = await createMediaAsset({
+      filename: req.file.originalname,
+      mimeType,
+      buffer: req.file.buffer,
+    });
 
-  res.json({
-    url: publicMediaAssetUrl(req, asset.id, asset.filename),
-    filename: asset.filename,
-  });
+    res.json({
+      url: publicMediaAssetUrl(req, asset.id, asset.filename),
+      filename: asset.filename,
+    });
+  } catch (err) {
+    req.log?.warn({ err }, "Image upload storage unavailable; returning inline data URL");
+    logger.warn({ err }, "Image upload storage unavailable; returning inline data URL");
+    res.json({
+      url: `data:${mimeType};base64,${req.file.buffer.toString("base64")}`,
+      filename: req.file.originalname,
+      storage: "inline",
+    });
+  }
 });
 
 async function sendMediaAsset(req: Request, res: Response): Promise<void> {

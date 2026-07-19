@@ -45,6 +45,15 @@ function entryToFile(entry: FileSystemFileEntry): Promise<File> {
   return new Promise((res, rej) => entry.file(res, rej));
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── Image embedding ───────────────────────────────────────────────────────────
 
 async function uploadImageFile(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
@@ -59,8 +68,13 @@ async function uploadImageFile(file: File, toast: ReturnType<typeof useToast>["t
     const data = await response.json() as { url?: string };
     return data.url ? apiUrl(data.url) : null;
   } catch {
-    toast({ title: `Failed to upload ${file.name}`, variant: "destructive" });
-    return null;
+    try {
+      toast({ title: `Using inline image for ${file.name}` });
+      return await fileToDataUrl(file);
+    } catch {
+      toast({ title: `Failed to import ${file.name}`, variant: "destructive" });
+      return null;
+    }
   }
 }
 

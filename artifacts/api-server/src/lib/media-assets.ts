@@ -2,6 +2,7 @@ import type { Request } from "express";
 import crypto from "crypto";
 import path from "path";
 import { mongo } from "@workspace/db";
+import { logger } from "./logger";
 
 const DATA_IMAGE_BASE64_RE = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)(?![a-z0-9+/=])/gi;
 const DATA_IMAGE_TEXT_RE = /data:(image\/[a-z0-9.+-]+)((?:;charset=[^;,]+|;utf-?8)*),([^"'\s>)]+)/gi;
@@ -81,8 +82,13 @@ export async function persistDataImageUrls(value: string, req: Request): Promise
     const hash = crypto.createHash("sha1").update(match.buffer).digest("hex").slice(0, 12);
     const mimeType = match.mimeType;
     const filename = `embedded-${hash}${extensionForMimeType(mimeType)}`;
-    const asset = await createMediaAsset({ filename, mimeType, buffer: match.buffer });
-    replacements.set(dataUrl, publicMediaAssetUrl(req, asset.id, asset.filename));
+    try {
+      const asset = await createMediaAsset({ filename, mimeType, buffer: match.buffer });
+      replacements.set(dataUrl, publicMediaAssetUrl(req, asset.id, asset.filename));
+    } catch (err) {
+      req.log?.warn({ err }, "Embedded image storage unavailable; keeping inline image");
+      logger.warn({ err }, "Embedded image storage unavailable; keeping inline image");
+    }
   }
 
   let out = value;

@@ -11,6 +11,15 @@ interface FileUploadProps {
   className?: string;
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
   try {
     const formData = new FormData();
@@ -26,8 +35,14 @@ async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast
     toast({ title: "Image added successfully" });
     return url;
   } catch {
-    toast({ title: "Image upload failed", variant: "destructive" });
-    return null;
+    try {
+      const url = await fileToDataUrl(file);
+      toast({ title: "Using inline image" });
+      return url;
+    } catch {
+      toast({ title: "Image upload failed", variant: "destructive" });
+      return null;
+    }
   }
 }
 
