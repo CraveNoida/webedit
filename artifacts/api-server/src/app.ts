@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
@@ -5,6 +7,8 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+const appDir = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.resolve(appDir, "..", "public");
 const allowedOrigins = new Set([
   "https://webedit-482.pages.dev",
   "https://webedit.pages.dev",
@@ -59,7 +63,7 @@ app.use(
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
-app.get("/", (_req, res) => {
+app.get("/api", (_req, res) => {
   res.json({
     name: "Webedit API",
     status: "ok",
@@ -68,6 +72,11 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/api", router);
+
+app.use(express.static(publicDir));
+app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   const status = typeof err?.status === "number" ? err.status : 500;

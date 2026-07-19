@@ -1,18 +1,47 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
+const workspaceDir = path.resolve(artifactDir, "..", "..");
+const webDir = path.resolve(workspaceDir, "artifacts", "webjal-studio");
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
+  const publicDir = path.resolve(artifactDir, "public");
   await rm(distDir, { recursive: true, force: true });
+  await rm(publicDir, { recursive: true, force: true });
+
+  const webBuild = spawnSync(
+    pnpm,
+    ["--filter", "@workspace/webjal-studio", "run", "build"],
+    {
+      cwd: workspaceDir,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      env: {
+        ...process.env,
+        NODE_ENV: "production",
+        BASE_PATH: process.env.BASE_PATH || "/",
+        VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || "",
+      },
+    },
+  );
+
+  if (webBuild.error) throw webBuild.error;
+  if (webBuild.status !== 0) {
+    throw new Error(`Web app build failed with status ${webBuild.status}`);
+  }
+
+  await cp(path.resolve(webDir, "dist", "public"), publicDir, { recursive: true });
 
   await esbuild({
     entryPoints: [
