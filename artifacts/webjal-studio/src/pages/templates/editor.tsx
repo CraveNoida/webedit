@@ -45,6 +45,7 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
+const MAX_TEMPLATE_PAYLOAD_BYTES = 3_800_000;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -52,6 +53,10 @@ function errorMessage(error: unknown, fallback: string): string {
 
 function shortError(message: string): string {
   return message.length > 140 ? `${message.slice(0, 137)}...` : message;
+}
+
+function payloadSize(value: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(value)).length;
 }
 
 export default function TemplateEditor() {
@@ -159,6 +164,12 @@ export default function TemplateEditor() {
       jsContent: values.jsContent || undefined,
       thumbnailUrl: values.thumbnailUrl || undefined,
     };
+    if (payloadSize(data) > MAX_TEMPLATE_PAYLOAD_BYTES) {
+      const message = "This template is too large for Vercel. Remove some images or use smaller images, then try again.";
+      setSubmitError(message);
+      toast({ title: "Template is too large", description: message, variant: "destructive" });
+      return;
+    }
 
     if (isEditing) {
       updateMutation.mutate({ id: Number(id), data });

@@ -9,6 +9,9 @@ const CSS_EXTS = new Set([".css"]);
 const JS_EXTS = new Set([".js"]);
 const HTML_EXTS = new Set([".html", ".htm"]);
 const SKIP_DIRS = ["node_modules", ".git", "vendor", "dist", "build", "__pycache__", ".next", ".nuxt"];
+const MAX_INLINE_IMAGE_BYTES = 180 * 1024;
+const MAX_INLINE_TOTAL_BYTES = 2_800_000;
+const COMPRESSIBLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/avif"]);
 
 function getExt(name: string): string {
   const dot = name.lastIndexOf(".");
@@ -45,6 +48,10 @@ function entryToFile(entry: FileSystemFileEntry): Promise<File> {
   return new Promise((res, rej) => entry.file(res, rej));
 }
 
+function dataUrlSize(dataUrl: string): number {
+  return Math.ceil(dataUrl.length * 0.75);
+}
+
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -52,6 +59,53 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to decode image"));
+    image.src = src;
+  });
+}
+
+async function compressedInlineImageUrl(file: File): Promise<string> {
+  if (!COMPRESSIBLE_IMAGE_TYPES.has(file.type)) {
+    if (file.size > MAX_INLINE_IMAGE_BYTES) {
+      throw new Error("Image is too large to inline");
+    }
+
+    return fileToDataUrl(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(objectUrl);
+    for (const maxDimension of [1000, 760, 560]) {
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is not available");
+
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of [0.76, 0.62, 0.48]) {
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        if (dataUrlSize(dataUrl) <= MAX_INLINE_IMAGE_BYTES) return dataUrl;
+      }
+    }
+
+    throw new Error("Image is too large to inline");
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 // ── Image embedding ───────────────────────────────────────────────────────────
@@ -69,8 +123,8 @@ async function uploadImageFile(file: File, toast: ReturnType<typeof useToast>["t
     return data.url ? apiUrl(data.url) : null;
   } catch {
     try {
-      toast({ title: `Using inline image for ${file.name}` });
-      return await fileToDataUrl(file);
+      toast({ title: `Using compressed inline image for ${file.name}` });
+      return await compressedInlineImageUrl(file);
     } catch {
       toast({ title: `Failed to import ${file.name}`, variant: "destructive" });
       return null;
@@ -456,17 +510,24 @@ async function processFiles(
   // 1. Embed all images in parallel so generated sites work on any device.
   if (imageRecs.length > 0) setMsg(`Embedding ${imageRecs.length} image(s)…`);
   const imageMap = new Map<string, string>();
-  const embeddedUrls = (
-    await Promise.all(
-    imageRecs.map(async ({ relPath, file }) => {
-      const url = await uploadImageFile(file, toast);
-      if (url) {
-        buildImageMap(relPath, url, imageMap);
+  const embeddedUrls: string[] = [];
+  let inlineBytes = 0;
+  for (const { relPath, file } of imageRecs) {
+    const url = await uploadImageFile(file, toast);
+    if (!url) continue;
+
+    if (url.startsWith("data:")) {
+      const nextBytes = dataUrlSize(url);
+      if (inlineBytes + nextBytes > MAX_INLINE_TOTAL_BYTES) {
+        toast({ title: `Skipped ${file.name} to keep template under Vercel size limits`, variant: "destructive" });
+        continue;
       }
-      return url;
-    })
-    )
-  ).filter((url): url is string => Boolean(url));
+      inlineBytes += nextBytes;
+    }
+
+    buildImageMap(relPath, url, imageMap);
+    embeddedUrls.push(url);
+  }
   const embeddedCount = embeddedUrls.length;
   if (embeddedCount > 0) summary.push(`${embeddedCount} image(s) uploaded`);
 

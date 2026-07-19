@@ -67,12 +67,12 @@ router.post("/", (req, res, next) => {
       filename: asset.filename,
     });
   } catch (err) {
-    req.log?.warn({ err }, "Image upload storage unavailable; returning inline data URL");
-    logger.warn({ err }, "Image upload storage unavailable; returning inline data URL");
-    res.json({
-      url: `data:${mimeType};base64,${req.file.buffer.toString("base64")}`,
+    req.log?.warn({ err }, "Image upload storage unavailable");
+    logger.warn({ err }, "Image upload storage unavailable");
+    res.status(503).json({
+      error: "Image storage is unavailable. The browser can embed a compressed inline image instead.",
       filename: req.file.originalname,
-      storage: "inline",
+      storage: "unavailable",
     });
   }
 });

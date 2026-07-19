@@ -4,11 +4,18 @@ import { UploadCloud, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/api-url";
 
+const MAX_INLINE_IMAGE_BYTES = 180 * 1024;
+const COMPRESSIBLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/avif"]);
+
 interface FileUploadProps {
   value: string;
   onChange: (url: string) => void;
   placeholder?: string;
   className?: string;
+}
+
+function dataUrlSize(dataUrl: string): number {
+  return Math.ceil(dataUrl.length * 0.75);
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -18,6 +25,50 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to decode image"));
+    image.src = src;
+  });
+}
+
+async function compressedInlineImageUrl(file: File): Promise<string> {
+  if (!COMPRESSIBLE_IMAGE_TYPES.has(file.type)) {
+    if (file.size > MAX_INLINE_IMAGE_BYTES) throw new Error("Image is too large to inline");
+    return fileToDataUrl(file);
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(objectUrl);
+    for (const maxDimension of [1000, 760, 560]) {
+      const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas is not available");
+
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of [0.76, 0.62, 0.48]) {
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        if (dataUrlSize(dataUrl) <= MAX_INLINE_IMAGE_BYTES) return dataUrl;
+      }
+    }
+
+    throw new Error("Image is too large to inline");
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast"]): Promise<string | null> {
@@ -36,8 +87,8 @@ async function uploadImage(file: File, toast: ReturnType<typeof useToast>["toast
     return url;
   } catch {
     try {
-      const url = await fileToDataUrl(file);
-      toast({ title: "Using inline image" });
+      const url = await compressedInlineImageUrl(file);
+      toast({ title: "Using compressed inline image" });
       return url;
     } catch {
       toast({ title: "Image upload failed", variant: "destructive" });
