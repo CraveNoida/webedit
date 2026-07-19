@@ -6,6 +6,7 @@ import cors from "cors";
 import { pinoHttp } from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { embeddedClientAssets } from "./generated/client-assets";
 
 const app: Express = express();
 const appDir = path.dirname(fileURLToPath(import.meta.url));
@@ -16,6 +17,7 @@ const publicDirs = [
   path.resolve(process.cwd(), "dist", "public"),
 ];
 const existingPublicDirs = publicDirs.filter((dir) => fs.existsSync(path.join(dir, "index.html")));
+const embeddedIndex = embeddedClientAssets["/index.html"];
 const allowedOrigins = new Set([
   "https://webedit-482.pages.dev",
   "https://webedit.pages.dev",
@@ -81,11 +83,31 @@ app.get("/api", (_req, res) => {
 
 app.use("/api", router);
 
+app.get(/.*/, (req, res, next) => {
+  const assetPath = new URL(req.originalUrl, "https://local.invalid").pathname;
+  const asset = embeddedClientAssets[assetPath];
+  if (!asset) {
+    next();
+    return;
+  }
+
+  res.setHeader("Content-Type", asset.contentType);
+  res.setHeader("Cache-Control", assetPath === "/index.html" ? "no-cache" : "public, max-age=31536000, immutable");
+  res.send(asset.encoding === "base64" ? Buffer.from(asset.body, "base64") : asset.body);
+});
+
 for (const publicDir of existingPublicDirs) {
   app.use(express.static(publicDir));
 }
 
 app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+  if (embeddedIndex) {
+    res.setHeader("Content-Type", embeddedIndex.contentType);
+    res.setHeader("Cache-Control", "no-cache");
+    res.send(embeddedIndex.body);
+    return;
+  }
+
   const publicDir = existingPublicDirs[0];
   if (!publicDir) {
     res.json({

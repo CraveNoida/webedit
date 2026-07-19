@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { cp, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -13,6 +13,72 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceDir = path.resolve(artifactDir, "..", "..");
 const webDir = path.resolve(workspaceDir, "artifacts", "webjal-studio");
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
+const textAssetExtensions = new Set([
+  ".css",
+  ".html",
+  ".js",
+  ".json",
+  ".map",
+  ".svg",
+  ".txt",
+]);
+
+function contentTypeForAsset(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".js") return "text/javascript; charset=utf-8";
+  if (ext === ".json" || ext === ".map") return "application/json; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml; charset=utf-8";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  if (ext === ".ico") return "image/x-icon";
+  return "application/octet-stream";
+}
+
+async function listFiles(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = await Promise.all(
+    entries.map((entry) => {
+      const fullPath = path.join(dir, entry.name);
+      return entry.isDirectory() ? listFiles(fullPath) : fullPath;
+    }),
+  );
+  return files.flat();
+}
+
+async function writeEmbeddedClientAssets(publicDir) {
+  const files = await listFiles(publicDir);
+  const assets = {};
+
+  for (const filePath of files) {
+    const routePath = `/${path.relative(publicDir, filePath).replace(/\\/g, "/")}`;
+    const ext = path.extname(filePath).toLowerCase();
+    const buffer = await readFile(filePath);
+    assets[routePath] = {
+      contentType: contentTypeForAsset(filePath),
+      encoding: textAssetExtensions.has(ext) ? "utf8" : "base64",
+      body: textAssetExtensions.has(ext) ? buffer.toString("utf8") : buffer.toString("base64"),
+    };
+  }
+
+  const generatedDir = path.resolve(artifactDir, "src", "generated");
+  await mkdir(generatedDir, { recursive: true });
+  await writeFile(
+    path.join(generatedDir, "client-assets.ts"),
+    `export type EmbeddedClientAsset = {
+  contentType: string;
+  encoding: "utf8" | "base64";
+  body: string;
+};
+
+export const embeddedClientAssets: Record<string, EmbeddedClientAsset> = ${JSON.stringify(assets)};
+`,
+  );
+}
 
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
@@ -43,6 +109,7 @@ async function buildAll() {
 
   const webPublicDir = path.resolve(webDir, "dist", "public");
   await cp(webPublicDir, publicDir, { recursive: true });
+  await writeEmbeddedClientAssets(webPublicDir);
 
   await esbuild({
     entryPoints: [
