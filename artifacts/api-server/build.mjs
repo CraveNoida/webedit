@@ -41,7 +41,8 @@ async function buildAll() {
     throw new Error(`Web app build failed with status ${webBuild.status}`);
   }
 
-  await cp(path.resolve(webDir, "dist", "public"), publicDir, { recursive: true });
+  const webPublicDir = path.resolve(webDir, "dist", "public");
+  await cp(webPublicDir, publicDir, { recursive: true });
 
   await esbuild({
     entryPoints: [
@@ -150,6 +151,8 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   });
+
+  await cp(webPublicDir, path.resolve(distDir, "public"), { recursive: true });
 }
 
 buildAll().catch((err) => {

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express, { type ErrorRequestHandler, type Express } from "express";
@@ -8,7 +9,13 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 const appDir = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.resolve(appDir, "..", "public");
+const publicDirs = [
+  path.resolve(appDir, "..", "public"),
+  path.resolve(appDir, "public"),
+  path.resolve(process.cwd(), "public"),
+  path.resolve(process.cwd(), "dist", "public"),
+];
+const existingPublicDirs = publicDirs.filter((dir) => fs.existsSync(path.join(dir, "index.html")));
 const allowedOrigins = new Set([
   "https://webedit-482.pages.dev",
   "https://webedit.pages.dev",
@@ -74,8 +81,22 @@ app.get("/api", (_req, res) => {
 
 app.use("/api", router);
 
-app.use(express.static(publicDir));
+for (const publicDir of existingPublicDirs) {
+  app.use(express.static(publicDir));
+}
+
 app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+  const publicDir = existingPublicDirs[0];
+  if (!publicDir) {
+    res.json({
+      name: "Webedit API",
+      status: "ok",
+      deployment: "full-stack-missing-public",
+      health: "/api/healthz",
+    });
+    return;
+  }
+
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
