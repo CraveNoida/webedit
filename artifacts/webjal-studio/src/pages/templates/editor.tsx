@@ -45,7 +45,10 @@ const formSchema = z.object({
 });
 
 type FormValues = z.infer<typeof formSchema>;
-const MAX_TEMPLATE_PAYLOAD_BYTES = 3_800_000;
+const MAX_TEMPLATE_PAYLOAD_BYTES = 2_800_000;
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E";
+const DATA_IMAGE_PATTERN = /data:image\/[a-z0-9.+-]+(?:;charset=[^;,]+|;utf-?8|;base64)*,[^"'\s>)]+/gi;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -57,6 +60,10 @@ function shortError(message: string): string {
 
 function payloadSize(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).length;
+}
+
+function replaceInlineImages(value: string | undefined): string | undefined {
+  return value?.replace(DATA_IMAGE_PATTERN, PLACEHOLDER_IMAGE);
 }
 
 export default function TemplateEditor() {
@@ -156,7 +163,7 @@ export default function TemplateEditor() {
 
   function onSubmit(values: FormValues) {
     setSubmitError("");
-    const data = {
+    let data = {
       ...values,
       placeholders,
       description: values.description || undefined,
@@ -164,6 +171,20 @@ export default function TemplateEditor() {
       jsContent: values.jsContent || undefined,
       thumbnailUrl: values.thumbnailUrl || undefined,
     };
+
+    if (payloadSize(data) > MAX_TEMPLATE_PAYLOAD_BYTES) {
+      data = {
+        ...data,
+        htmlContent: replaceInlineImages(data.htmlContent) ?? data.htmlContent,
+        cssContent: replaceInlineImages(data.cssContent),
+        thumbnailUrl: data.thumbnailUrl?.startsWith("data:image") ? undefined : data.thumbnailUrl,
+      };
+      toast({
+        title: "Removed oversized inline images",
+        description: "The template code was saved without embedded image data to stay under Vercel limits.",
+      });
+    }
+
     if (payloadSize(data) > MAX_TEMPLATE_PAYLOAD_BYTES) {
       const message = "This template is too large for Vercel. Remove some images or use smaller images, then try again.";
       setSubmitError(message);

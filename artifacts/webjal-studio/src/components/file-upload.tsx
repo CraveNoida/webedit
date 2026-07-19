@@ -4,7 +4,7 @@ import { UploadCloud, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/api-url";
 
-const MAX_INLINE_IMAGE_BYTES = 180 * 1024;
+const MAX_INLINE_IMAGE_BYTES = 90 * 1024;
 const COMPRESSIBLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/avif"]);
 
 interface FileUploadProps {

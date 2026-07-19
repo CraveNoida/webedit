@@ -9,8 +9,8 @@ const CSS_EXTS = new Set([".css"]);
 const JS_EXTS = new Set([".js"]);
 const HTML_EXTS = new Set([".html", ".htm"]);
 const SKIP_DIRS = ["node_modules", ".git", "vendor", "dist", "build", "__pycache__", ".next", ".nuxt"];
-const MAX_INLINE_IMAGE_BYTES = 180 * 1024;
-const MAX_INLINE_TOTAL_BYTES = 2_800_000;
+const MAX_INLINE_IMAGE_BYTES = 90 * 1024;
+const MAX_INLINE_TOTAL_BYTES = 900_000;
 const COMPRESSIBLE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/avif"]);
 
 function getExt(name: string): string {
