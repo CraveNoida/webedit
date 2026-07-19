@@ -32,6 +32,7 @@ node_modules
 /.env.*.local
 /uploads/
 /artifacts/api-server/uploads/
+/artifacts/api-server/public/
 /.sass-cache
 /connect.lock
 /coverage
