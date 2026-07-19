@@ -29,7 +29,10 @@ function mongoDatabaseName(url: string): string {
 }
 
 async function client(): Promise<MongoClient> {
-  clientPromise ??= new MongoClient(mongoUrl()).connect();
+  clientPromise ??= new MongoClient(mongoUrl(), {
+    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 5000,
+  }).connect();
   return clientPromise;
 }
 
