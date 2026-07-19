@@ -67,6 +67,7 @@ app.get("/api", (_req, res) => {
   res.json({
     name: "Webedit API",
     status: "ok",
+    deployment: "full-stack",
     health: "/api/healthz",
   });
 });
