@@ -13,8 +13,7 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
-const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E";
+const PLACEHOLDER_IMAGE = "https://placehold.co/16x9?text=";
 const DATA_IMAGE_PATTERN = /data:image\/[a-z0-9.+-]+(?:;charset=[^;,]+|;utf-?8|;base64)*,[^"'\s>)]+/gi;
 const MAX_HTML_CHARS = 1_800_000;
 const MAX_CSS_CHARS = 700_000;
