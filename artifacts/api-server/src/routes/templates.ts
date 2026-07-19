@@ -13,9 +13,33 @@ import {
 } from "@workspace/api-zod";
 
 const router = Router();
+const PLACEHOLDER_IMAGE =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 9'%3E%3C/svg%3E";
+const DATA_IMAGE_PATTERN = /data:image\/[a-z0-9.+-]+(?:;charset=[^;,]+|;utf-?8|;base64)*,[^"'\s>)]+/gi;
+const MAX_HTML_CHARS = 1_800_000;
+const MAX_CSS_CHARS = 700_000;
+const MAX_JS_CHARS = 500_000;
 
 function cleanText(value: string | undefined): string | undefined {
   return value?.replace(/\u0000/g, "");
+}
+
+function stripInlineImages(value: string): string {
+  return value.replace(DATA_IMAGE_PATTERN, PLACEHOLDER_IMAGE);
+}
+
+function limitText(value: string | null, maxChars: number, label: string): string | null {
+  if (value === null || value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n\n/* ${label} truncated to fit deployment storage limits. */`;
+}
+
+function prepareHtmlContent(value: string | undefined): string {
+  return limitText(stripInlineImages(cleanText(value) ?? ""), MAX_HTML_CHARS, "HTML") ?? "";
+}
+
+function prepareOptionalContent(value: string | undefined, maxChars: number, label: string): string | null {
+  if (value === undefined) return null;
+  return limitText(stripInlineImages(cleanText(value) ?? ""), maxChars, label);
 }
 
 function serverErrorMessage(error: unknown): string {
@@ -76,18 +100,17 @@ router.post("/", async (req, res): Promise<void> => {
 
   try {
     // Auto-inject placeholders at creation time so hardcoded names/contacts are templatized immediately.
-    const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
+    const htmlContent = await persistDataImageUrls(prepareHtmlContent(body.data.htmlContent), req);
     const htmlError = validateRenderableHtml(htmlContent);
     if (htmlError) {
       res.status(400).json({ error: htmlError });
       return;
     }
 
-    const cssContent = body.data.cssContent !== undefined
-      ? await persistDataImageUrls(cleanText(body.data.cssContent) ?? "", req)
-      : null;
+    const preparedCss = prepareOptionalContent(body.data.cssContent, MAX_CSS_CHARS, "CSS");
+    const cssContent = preparedCss !== null ? await persistDataImageUrls(preparedCss, req) : null;
     const thumbnailUrl = body.data.thumbnailUrl?.startsWith("data:image")
-      ? await persistDataImageUrls(body.data.thumbnailUrl, req)
+      ? null
       : body.data.thumbnailUrl ?? null;
     const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
     const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
@@ -98,7 +121,7 @@ router.post("/", async (req, res): Promise<void> => {
       description: cleanText(body.data.description) ?? null,
       htmlContent: injectedHtml,
       cssContent,
-      jsContent: cleanText(body.data.jsContent) ?? null,
+      jsContent: prepareOptionalContent(body.data.jsContent, MAX_JS_CHARS, "JavaScript"),
       thumbnailUrl,
       placeholders: mergedPh,
     });
@@ -143,7 +166,7 @@ router.put("/:id", async (req, res): Promise<void> => {
   if (body.data.category !== undefined) updateData.category = body.data.category;
   if (body.data.description !== undefined) updateData.description = cleanText(body.data.description) ?? null;
   if (body.data.htmlContent !== undefined) {
-    const htmlContent = await persistDataImageUrls(cleanText(body.data.htmlContent) ?? "", req);
+    const htmlContent = await persistDataImageUrls(prepareHtmlContent(body.data.htmlContent), req);
     const htmlError = validateRenderableHtml(htmlContent);
     if (htmlError) {
       res.status(400).json({ error: htmlError });
@@ -154,11 +177,14 @@ router.put("/:id", async (req, res): Promise<void> => {
     updateData.htmlContent = injectedHtml;
     updateData.placeholders = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
   }
-  if (body.data.cssContent !== undefined) updateData.cssContent = await persistDataImageUrls(cleanText(body.data.cssContent) ?? "", req);
-  if (body.data.jsContent !== undefined) updateData.jsContent = cleanText(body.data.jsContent) ?? null;
+  if (body.data.cssContent !== undefined) {
+    const preparedCss = prepareOptionalContent(body.data.cssContent, MAX_CSS_CHARS, "CSS");
+    updateData.cssContent = preparedCss !== null ? await persistDataImageUrls(preparedCss, req) : null;
+  }
+  if (body.data.jsContent !== undefined) updateData.jsContent = prepareOptionalContent(body.data.jsContent, MAX_JS_CHARS, "JavaScript");
   if (body.data.thumbnailUrl !== undefined) {
     updateData.thumbnailUrl = body.data.thumbnailUrl.startsWith("data:image")
-      ? await persistDataImageUrls(body.data.thumbnailUrl, req)
+      ? null
       : body.data.thumbnailUrl;
   }
   if (body.data.placeholders !== undefined && body.data.htmlContent === undefined) updateData.placeholders = body.data.placeholders;
