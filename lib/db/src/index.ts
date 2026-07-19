@@ -29,3 +29,4 @@ export const db = databaseUrl
   : (missingDatabaseUrlProxy as ReturnType<typeof drizzle<typeof schema>>);
 
 export * from "./schema";
+export * as mongo from "./mongo";

@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import crypto from "crypto";
 import path from "path";
-import { db, mediaAssetsTable } from "@workspace/db";
+import { mongo } from "@workspace/db";
 
 const DATA_IMAGE_BASE64_RE = /data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)(?![a-z0-9+/=])/gi;
 const DATA_IMAGE_TEXT_RE = /data:(image\/[a-z0-9.+-]+)((?:;charset=[^;,]+|;utf-?8)*),([^"'\s>)]+)/gi;
@@ -42,14 +42,11 @@ export async function createMediaAsset(input: {
   mimeType: string;
   buffer: Buffer;
 }) {
-  const [asset] = await db
-    .insert(mediaAssetsTable)
-    .values({
-      filename: cleanFilename(input.filename),
-      mimeType: input.mimeType,
-      dataBase64: input.buffer.toString("base64"),
-    })
-    .returning();
+  const asset = await mongo.createMediaAsset({
+    filename: cleanFilename(input.filename),
+    mimeType: input.mimeType,
+    dataBase64: input.buffer.toString("base64"),
+  });
 
   return asset;
 }

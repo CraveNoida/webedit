@@ -1,8 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import path from "path";
-import { db, mediaAssetsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { mongo } from "@workspace/db";
 import { createMediaAsset, publicMediaAssetUrl } from "../lib/media-assets";
 
 const router = Router();
@@ -60,7 +59,7 @@ async function sendMediaAsset(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const [asset] = await db.select().from(mediaAssetsTable).where(eq(mediaAssetsTable.id, id));
+  const asset = await mongo.getMediaAsset(id);
   if (!asset) {
     res.status(404).json({ error: "File not found" });
     return;

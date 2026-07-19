@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, projectsTable, templatesTable } from "@workspace/db";
-import { eq, ilike, or } from "drizzle-orm";
+import { mongo } from "@workspace/db";
 import { injectPlaceholders } from "../utils/inject-placeholders";
 import { ZipArchive } from "archiver";
 import fs from "fs";
@@ -1250,22 +1249,18 @@ async function prepareTemplateForProject(template: ProjectTemplate): Promise<Pro
     return template;
   }
 
-  const [updatedTemplate] = await db
-    .update(templatesTable)
-    .set({ htmlContent: injectedHtml, placeholders: mergedPh })
-    .where(eq(templatesTable.id, template.id))
-    .returning();
+  const updatedTemplate = await mongo.updateTemplate(template.id, {
+    htmlContent: injectedHtml,
+    placeholders: mergedPh,
+  });
 
-  return updatedTemplate;
+  return updatedTemplate ?? template;
 }
 
 async function generatePreparedHtmlForProject(project: ProjectData & { templateId?: number | null }): Promise<string | null> {
   if (!project.templateId) return null;
 
-  const [templateRow] = await db
-    .select()
-    .from(templatesTable)
-    .where(eq(templatesTable.id, project.templateId));
+  const templateRow = await mongo.getTemplate(project.templateId);
 
   if (!templateRow) return null;
 
@@ -1291,19 +1286,12 @@ router.get("/", async (req, res): Promise<void> => {
     return;
   }
 
-  const projects = await db
-    .select()
-    .from(projectsTable)
-    .where(query.data.category ? eq(projectsTable.category, query.data.category) : undefined)
-    .orderBy(projectsTable.updatedAt);
+  const projects = await mongo.listProjects({
+    category: query.data.category,
+    search: query.data.search,
+  });
 
-  const result = query.data.search
-    ? projects.filter((p) =>
-        p.businessName.toLowerCase().includes(query.data.search!.toLowerCase())
-      )
-    : projects;
-
-  res.json(result.reverse());
+  res.json(projects);
 });
 
 router.post("/", async (req, res): Promise<void> => {
@@ -1319,31 +1307,29 @@ router.post("/", async (req, res): Promise<void> => {
     galleryImages: body.data.galleryImages ?? [],
   }, req);
 
-  const [project] = await db
-    .insert(projectsTable)
-    .values({
-      businessName: body.data.businessName,
-      category: body.data.category,
-      tagline: body.data.tagline ?? null,
-      about: body.data.about ?? null,
-      phone: body.data.phone ?? null,
-      whatsapp: body.data.whatsapp ?? null,
-      email: body.data.email ?? null,
-      address: body.data.address ?? null,
-      googleMapsLink: body.data.googleMapsLink ?? null,
-      instagramLink: body.data.instagramLink ?? null,
-      services: body.data.services ?? [],
-      packages: body.data.packages ?? [],
-      ctaText: body.data.ctaText ?? null,
-      primaryColor: body.data.primaryColor ?? "#4f46e5",
-      secondaryColor: body.data.secondaryColor ?? "#7c3aed",
-      logoUrl: imageFields.logoUrl as string | null,
-      heroImageUrl: imageFields.heroImageUrl as string | null,
-      galleryImages: imageFields.galleryImages as string[],
-      templateId: body.data.templateId ?? null,
-      status: "draft",
-    })
-    .returning();
+  const project = await mongo.createProject({
+    businessName: body.data.businessName,
+    category: body.data.category,
+    tagline: body.data.tagline ?? null,
+    about: body.data.about ?? null,
+    phone: body.data.phone ?? null,
+    whatsapp: body.data.whatsapp ?? null,
+    email: body.data.email ?? null,
+    address: body.data.address ?? null,
+    googleMapsLink: body.data.googleMapsLink ?? null,
+    instagramLink: body.data.instagramLink ?? null,
+    services: body.data.services ?? [],
+    packages: body.data.packages ?? [],
+    ctaText: body.data.ctaText ?? null,
+    primaryColor: body.data.primaryColor ?? "#4f46e5",
+    secondaryColor: body.data.secondaryColor ?? "#7c3aed",
+    logoUrl: imageFields.logoUrl as string | null,
+    heroImageUrl: imageFields.heroImageUrl as string | null,
+    galleryImages: imageFields.galleryImages as string[],
+    templateId: body.data.templateId ?? null,
+    generatedHtml: null,
+    status: "draft",
+  });
 
   res.status(201).json(project);
 });
@@ -1355,10 +1341,7 @@ router.get("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [project] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+  const project = await mongo.getProject(params.data.id);
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -1380,10 +1363,7 @@ router.get("/:id/preview", async (req, res): Promise<void> => {
     return;
   }
 
-  const [project] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+  const project = await mongo.getProject(params.data.id);
 
   if (!project) {
     res.status(404).send("Project not found");
@@ -1431,11 +1411,7 @@ router.put("/:id", async (req, res): Promise<void> => {
     updateData.status = "draft";
   }
 
-  const [project] = await db
-    .update(projectsTable)
-    .set(updateData)
-    .where(eq(projectsTable.id, params.data.id))
-    .returning();
+  const project = await mongo.updateProject(params.data.id, updateData);
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -1457,7 +1433,7 @@ router.delete("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  await db.delete(projectsTable).where(eq(projectsTable.id, params.data.id));
+  await mongo.deleteProject(params.data.id);
   res.json({ success: true });
 });
 
@@ -1468,10 +1444,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const [project] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+  const project = await mongo.getProject(params.data.id);
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });
@@ -1483,10 +1456,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const [templateRow] = await db
-    .select()
-    .from(templatesTable)
-    .where(eq(templatesTable.id, project.templateId));
+  const templateRow = await mongo.getTemplate(project.templateId);
 
   if (!templateRow) {
     res.status(404).json({ error: "Template not found" });
@@ -1496,11 +1466,7 @@ router.post("/:id/generate", async (req, res): Promise<void> => {
   const template = await prepareTemplateForProject(templateRow);
   const generatedHtml = generateHtml(template, project);
 
-  const [updated] = await db
-    .update(projectsTable)
-    .set({ generatedHtml, status: "generated" })
-    .where(eq(projectsTable.id, params.data.id))
-    .returning();
+  const updated = await mongo.updateProject(params.data.id, { generatedHtml, status: "generated" });
 
   res.json(updated);
 });
@@ -1512,42 +1478,36 @@ router.post("/:id/duplicate", async (req, res): Promise<void> => {
     return;
   }
 
-  const [original] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, params.data.id));
+  const original = await mongo.getProject(params.data.id);
 
   if (!original) {
     res.status(404).json({ error: "Project not found" });
     return;
   }
 
-  const [duplicate] = await db
-    .insert(projectsTable)
-    .values({
-      businessName: `${original.businessName} (Copy)`,
-      category: original.category,
-      tagline: original.tagline,
-      about: original.about,
-      phone: original.phone,
-      whatsapp: original.whatsapp,
-      email: original.email,
-      address: original.address,
-      googleMapsLink: original.googleMapsLink,
-      instagramLink: original.instagramLink,
-      services: original.services,
-      packages: original.packages,
-      ctaText: original.ctaText,
-      primaryColor: original.primaryColor,
-      secondaryColor: original.secondaryColor,
-      logoUrl: original.logoUrl,
-      heroImageUrl: original.heroImageUrl,
-      galleryImages: original.galleryImages,
-      templateId: original.templateId,
-      generatedHtml: null,
-      status: "draft",
-    })
-    .returning();
+  const duplicate = await mongo.createProject({
+    businessName: `${original.businessName} (Copy)`,
+    category: original.category,
+    tagline: original.tagline,
+    about: original.about,
+    phone: original.phone,
+    whatsapp: original.whatsapp,
+    email: original.email,
+    address: original.address,
+    googleMapsLink: original.googleMapsLink,
+    instagramLink: original.instagramLink,
+    services: original.services,
+    packages: original.packages,
+    ctaText: original.ctaText,
+    primaryColor: original.primaryColor,
+    secondaryColor: original.secondaryColor,
+    logoUrl: original.logoUrl,
+    heroImageUrl: original.heroImageUrl,
+    galleryImages: original.galleryImages,
+    templateId: original.templateId,
+    generatedHtml: null,
+    status: "draft",
+  });
 
   res.status(201).json(duplicate);
 });
@@ -1561,11 +1521,7 @@ router.put("/:id/html", async (req, res): Promise<void> => {
     res.status(400).json({ error: "html must be a non-empty string" });
     return;
   }
-  const [updated] = await db
-    .update(projectsTable)
-    .set({ generatedHtml: html, updatedAt: new Date() })
-    .where(eq(projectsTable.id, id))
-    .returning();
+  const updated = await mongo.updateProject(id, { generatedHtml: html });
   if (!updated) { res.status(404).json({ error: "Project not found" }); return; }
   res.json(updated);
 });
@@ -1578,10 +1534,7 @@ router.get("/:id/download-zip", async (req, res): Promise<void> => {
     return;
   }
 
-  const [project] = await db
-    .select()
-    .from(projectsTable)
-    .where(eq(projectsTable.id, id));
+  const project = await mongo.getProject(id);
 
   if (!project) {
     res.status(404).json({ error: "Project not found" });

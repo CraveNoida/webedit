@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db, templatesTable } from "@workspace/db";
-import { eq, ilike } from "drizzle-orm";
+import { mongo } from "@workspace/db";
 import { injectPlaceholders } from "../utils/inject-placeholders";
 import { logger } from "../lib/logger";
 import { persistDataImageUrls } from "../lib/media-assets";
@@ -59,11 +58,7 @@ router.get("/", async (req, res): Promise<void> => {
     return;
   }
 
-  const templates = await db
-    .select()
-    .from(templatesTable)
-    .where(query.data.category ? eq(templatesTable.category, query.data.category) : undefined)
-    .orderBy(templatesTable.createdAt);
+  const templates = await mongo.listTemplates(query.data.category);
 
   res.json(templates);
 });
@@ -93,19 +88,16 @@ router.post("/", async (req, res): Promise<void> => {
     const { html: injectedHtml, placeholders: detectedPh } = injectPlaceholders(htmlContent);
     const mergedPh = [...new Set([...(body.data.placeholders ?? []), ...detectedPh])];
 
-    const [template] = await db
-      .insert(templatesTable)
-      .values({
-        name: body.data.name,
-        category: body.data.category,
-        description: cleanText(body.data.description) ?? null,
-        htmlContent: injectedHtml,
-        cssContent,
-        jsContent: cleanText(body.data.jsContent) ?? null,
-        thumbnailUrl,
-        placeholders: mergedPh,
-      })
-      .returning();
+    const template = await mongo.createTemplate({
+      name: body.data.name,
+      category: body.data.category,
+      description: cleanText(body.data.description) ?? null,
+      htmlContent: injectedHtml,
+      cssContent,
+      jsContent: cleanText(body.data.jsContent) ?? null,
+      thumbnailUrl,
+      placeholders: mergedPh,
+    });
 
     res.status(201).json(template);
   } catch (err) {
@@ -123,10 +115,7 @@ router.get("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [template] = await db
-    .select()
-    .from(templatesTable)
-    .where(eq(templatesTable.id, params.data.id));
+  const template = await mongo.getTemplate(params.data.id);
 
   if (!template) {
     res.status(404).json({ error: "Template not found" });
@@ -170,11 +159,7 @@ router.put("/:id", async (req, res): Promise<void> => {
   }
   if (body.data.placeholders !== undefined && body.data.htmlContent === undefined) updateData.placeholders = body.data.placeholders;
 
-  const [template] = await db
-    .update(templatesTable)
-    .set(updateData)
-    .where(eq(templatesTable.id, params.data.id))
-    .returning();
+  const template = await mongo.updateTemplate(params.data.id, updateData);
 
   if (!template) {
     res.status(404).json({ error: "Template not found" });
@@ -191,7 +176,7 @@ router.delete("/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  await db.delete(templatesTable).where(eq(templatesTable.id, params.data.id));
+  await mongo.deleteTemplate(params.data.id);
   res.json({ success: true });
 });
 
@@ -203,7 +188,7 @@ router.post("/:id/inject", async (req, res): Promise<void> => {
     return;
   }
 
-  const [template] = await db.select().from(templatesTable).where(eq(templatesTable.id, id));
+  const template = await mongo.getTemplate(id);
   if (!template) {
     res.status(404).json({ error: "Template not found" });
     return;
@@ -211,11 +196,7 @@ router.post("/:id/inject", async (req, res): Promise<void> => {
 
   const { html, placeholders, detected } = injectPlaceholders(template.htmlContent);
 
-  const [updated] = await db
-    .update(templatesTable)
-    .set({ htmlContent: html, placeholders })
-    .where(eq(templatesTable.id, id))
-    .returning();
+  const updated = await mongo.updateTemplate(id, { htmlContent: html, placeholders });
 
   res.json({ template: updated, detected });
 });
