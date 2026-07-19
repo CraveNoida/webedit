@@ -80,6 +80,40 @@ export const embeddedClientAssets: Record<string, EmbeddedClientAsset> = ${JSON.
   );
 }
 
+async function inlineClientEntrypoints(publicDir) {
+  const indexPath = path.join(publicDir, "index.html");
+  let html = await readFile(indexPath, "utf8");
+
+  html = await replaceAsync(
+    html,
+    /<link rel="stylesheet" crossorigin href="([^"]+\.css)">/g,
+    async (_match, href) => {
+      const cssPath = path.join(publicDir, href.replace(/^\//, ""));
+      const css = await readFile(cssPath, "utf8");
+      return `<style data-webedit-inline="css">\n${css}\n</style>`;
+    },
+  );
+
+  html = await replaceAsync(
+    html,
+    /<script type="module" crossorigin src="([^"]+\.js)"><\/script>/g,
+    async (_match, src) => {
+      const jsPath = path.join(publicDir, src.replace(/^\//, ""));
+      const js = (await readFile(jsPath, "utf8")).replace(/<\/script/gi, "<\\/script");
+      return `<script type="module" data-webedit-inline="js">\n${js}\n</script>`;
+    },
+  );
+
+  await writeFile(indexPath, html);
+}
+
+async function replaceAsync(value, pattern, replacer) {
+  const matches = [...value.matchAll(pattern)];
+  const replacements = await Promise.all(matches.map((match) => replacer(...match)));
+  let index = 0;
+  return value.replace(pattern, () => replacements[index++]);
+}
+
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   const publicDir = path.resolve(artifactDir, "public");
@@ -108,6 +142,7 @@ async function buildAll() {
   }
 
   const webPublicDir = path.resolve(webDir, "dist", "public");
+  await inlineClientEntrypoints(webPublicDir);
   await cp(webPublicDir, publicDir, { recursive: true });
   await writeEmbeddedClientAssets(webPublicDir);
 
